@@ -37,8 +37,9 @@ docs/       PROTOCOL.md, WIRING.md, schematic.png (schemat płytki)
 
 - 1× Arduino / SparkFun **Pro Micro** (ATmega32U4), 5 V/16 MHz albo 3,3 V/8 MHz
 - 8× przełącznik **Kailh Choc** (low profile) + nasadki Choc, 8× dioda 1N4148
-- 1× OLED **2,42" SSD1309 128×64 I²C** – moduł ShengYang, najlepiej wersja **4-pinowa I²C**
-  (70,10 × 48,10 mm); wersja 7-pinowa (72 × 43 mm) wymaga przełożenia rezystorów z SPI na I²C.
+- 1× OLED **2,42" SSD1309 128×64 I²C** – moduł ShengYang, wersja **4-pinowa I²C**
+  (70,10 × 48,10 mm, używana w projekcie); wersja 7-pinowa (72 × 43 mm) też pasuje do obudowy
+  (`oled_variant`), ale wymaga przełożenia rezystorów z SPI na I²C.
   Szczegóły i karta sprzedawcy: [docs/WIRING.md](docs/WIRING.md#oled-242-ssd1309-12864-ic-złącze-j1)
 - płytka ChocPilot (schemat: [docs/schematic.png](docs/schematic.png))
 

@@ -53,7 +53,8 @@ Wolne: 0/1 (UART TX/RX), A0–A3, 10, 14, 15, 16.
 ## OLED 2,42" SSD1309 128×64 (I²C), złącze J1
 
 Używany moduł: **ShengYang 2,42" OLED** (karta sprzedawcy: [img/oled_242_shengyang.png](img/oled_242_shengyang.png)).
-Sprzedawca oferuje kilka wersji płytki – w obudowie wybiera się je parametrem `oled_variant`:
+W ChocPilot używana jest **wersja 4-pinowa I²C (70,10 × 48,10 mm)**. Sprzedawca oferuje kilka
+wersji płytki – w obudowie wybiera się je parametrem `oled_variant`:
 
 | Wersja | Płytka modułu | Wyprowadzenia | `oled_variant` |
 |---|---|---|---|
