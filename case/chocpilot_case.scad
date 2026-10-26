@@ -122,11 +122,13 @@ j1_box  = box2s(j1_kicad);
 oled_c  = [keys_cx, (key_y[0] + key_y[1]) / 2];
 
 inner = [pcb[0] + 2 * pcb_clear, pcb[1] + 2 * pcb_clear];  // wnętrze (od -pcb_clear)
-// Obrys symetryczny względem klawiszy i ekranu (PCB jest szersza w prawo pod Pro Micro):
-// szerszy bok wyznacza połowę szerokości, lewa ścianka jest odpowiednio grubsza.
-half_w = max(pcb[0] + pcb_clear + rim - keys_cx, keys_cx + pcb_clear + rim);
-outer = [2 * half_w, inner[1] + 2 * rim];
-o0    = [keys_cx - half_w, -pcb_clear - rim];               // narożnik zewnętrzny
+// Obrys symetryczny względem klawiszy i ekranu w obu osiach (PCB jest szersza w prawo pod
+// Pro Micro i ma większy margines nad górnym rzędem): dalszy bok wyznacza połowę wymiaru,
+// po przeciwnej stronie ścianka jest odpowiednio grubsza.
+half_w = max(pcb[0] + pcb_clear + rim - oled_c[0], oled_c[0] + pcb_clear + rim);
+half_h = max(pcb[1] + pcb_clear + rim - oled_c[1], oled_c[1] + pcb_clear + rim);
+outer = [2 * half_w, 2 * half_h];
+o0    = [oled_c[0] - half_w, oled_c[1] - half_h];           // narożnik zewnętrzny
 
 // wysokości (z = 0: spód dna)
 pcb_bot   = floor_t + standoff_h;
@@ -167,7 +169,9 @@ screw_to_glass = min([for (h = oled_hole_pos) max(abs(h[0] - glass_c[0]) - glass
 // moduł między obrysami przełączników (wisi nisko, obok ich korpusów)
 module_to_switch = min(key_y[0] - choc_court - (oled_c[1] + oled_pcb[1] / 2),
                        (oled_c[1] - oled_pcb[1] / 2) - (key_y[1] + choc_court));
-echo(str("ścianki: lewa ", -pcb_clear - o0[0], " mm, prawa ", o0[0] + outer[0] - pcb[0] - pcb_clear, " mm; środek obudowy x ", o0[0] + outer[0] / 2, " = klawisze ", keys_cx));
+echo(str("ścianki: lewa ", -pcb_clear - o0[0], ", prawa ", o0[0] + outer[0] - pcb[0] - pcb_clear,
+         ", dolna ", -pcb_clear - o0[1], ", górna ", o0[1] + outer[1] - pcb[1] - pcb_clear,
+         " mm; środek obudowy ", o0 + outer / 2, " = środek klawiszy i ekranu ", oled_c));
 echo(str("PCB ", pcb[0], " × ", pcb[1], " mm; obudowa ", outer[0], " × ", outer[1], " × ",
          key_top, " mm"));
 echo(str("OLED ", oled_variant, ": szkło ", key_top - glass_top, " mm pod powierzchnią, gniazda ",
