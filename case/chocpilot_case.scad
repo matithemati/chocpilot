@@ -122,8 +122,11 @@ j1_box  = box2s(j1_kicad);
 oled_c  = [keys_cx, (key_y[0] + key_y[1]) / 2];
 
 inner = [pcb[0] + 2 * pcb_clear, pcb[1] + 2 * pcb_clear];  // wnętrze (od -pcb_clear)
-outer = [inner[0] + 2 * rim, inner[1] + 2 * rim];
-o0    = [-pcb_clear - rim, -pcb_clear - rim];               // narożnik zewnętrzny
+// Obrys symetryczny względem klawiszy i ekranu (PCB jest szersza w prawo pod Pro Micro):
+// szerszy bok wyznacza połowę szerokości, lewa ścianka jest odpowiednio grubsza.
+half_w = max(pcb[0] + pcb_clear + rim - keys_cx, keys_cx + pcb_clear + rim);
+outer = [2 * half_w, inner[1] + 2 * rim];
+o0    = [keys_cx - half_w, -pcb_clear - rim];               // narożnik zewnętrzny
 
 // wysokości (z = 0: spód dna)
 pcb_bot   = floor_t + standoff_h;
@@ -164,6 +167,7 @@ screw_to_glass = min([for (h = oled_hole_pos) max(abs(h[0] - glass_c[0]) - glass
 // moduł między obrysami przełączników (wisi nisko, obok ich korpusów)
 module_to_switch = min(key_y[0] - choc_court - (oled_c[1] + oled_pcb[1] / 2),
                        (oled_c[1] - oled_pcb[1] / 2) - (key_y[1] + choc_court));
+echo(str("ścianki: lewa ", -pcb_clear - o0[0], " mm, prawa ", o0[0] + outer[0] - pcb[0] - pcb_clear, " mm; środek obudowy x ", o0[0] + outer[0] / 2, " = klawisze ", keys_cx));
 echo(str("PCB ", pcb[0], " × ", pcb[1], " mm; obudowa ", outer[0], " × ", outer[1], " × ",
          key_top, " mm"));
 echo(str("OLED ", oled_variant, ": szkło ", key_top - glass_top, " mm pod powierzchnią, gniazda ",

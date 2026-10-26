@@ -198,7 +198,7 @@ automatycznie z pól modelu.
 
 ## Obudowa (OpenSCAD)
 
-`case/chocpilot_case.scad` – obudowa **90,3 × 99,6 × 20 mm** z płaską górą, dopasowana do
+`case/chocpilot_case.scad` – obudowa **93,5 × 99,6 × 20 mm** z płaską górą, symetryczna względem klawiszy i ekranu (lewa ścianka grubsza o tyle, o ile PCB wystaje w prawo pod Pro Micro), dopasowana do
 kompaktowej płytki z KiCad (`esp_macropad/pcb/tap32/tap32.kicad_pcb`, podgląd:
 [docs/img/pcb_compact.png](docs/img/pcb_compact.png)): obrys 79,5 × 88,75 mm, rzędy klawiszy
 67 mm od siebie, ekran 2,42" poziomo dokładnie pośrodku (ten sam odstęp od obu rzędów).
