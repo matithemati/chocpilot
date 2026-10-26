@@ -1,0 +1,243 @@
+"""Implementacja funkcji systemowych dla Windows 10/11."""
+
+from __future__ import annotations
+
+import contextlib
+import ctypes
+import logging
+import os
+import shlex
+import shutil
+import subprocess
+import winreg
+from typing import Any
+
+import psutil
+
+from .base import PlatformBackend, PlatformError, pick_window
+from .keys import PynputInput
+
+log = logging.getLogger("chocpilot.platform")
+
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+RUN_VALUE = "ChocPilot"
+CREATE_NO_WINDOW = 0x08000000
+CREATE_NEW_CONSOLE = 0x00000010
+
+
+class WindowsPlatform(PynputInput, PlatformBackend):
+    name = "windows"
+
+    def __init__(self) -> None:
+        PynputInput.__init__(self)
+
+    def thread_init(self) -> None:
+        try:
+            import comtypes
+
+            comtypes.CoInitialize()
+        except Exception as exc:
+            log.debug("CoInitialize: %s", exc)
+
+    # ------------------------------------------------------------------ programy
+
+    def launch(self, path: str, args: str = "", cwd: str = "") -> None:
+        try:
+            os.startfile(path, "open", args, cwd or None)  # type: ignore[attr-defined,call-arg]
+        except OSError:
+            # Awaryjnie: bezpośrednie uruchomienie (np. ścieżki z argumentami)
+            argv = [path, *shlex.split(args, posix=False)] if args else [path]
+            subprocess.Popen(argv, cwd=cwd or None, close_fds=True)
+
+    def focus_process(self, exe_name: str, cycle: bool = False) -> bool:
+        import win32con
+        import win32gui
+        import win32process
+
+        target = exe_name.lower()
+        pids = {
+            p.info["pid"]
+            for p in psutil.process_iter(["pid", "name"])
+            if (p.info.get("name") or "").lower() == target
+        }
+        if not pids:
+            return False
+        windows: list[int] = []
+
+        def collect(hwnd: int, _: Any) -> bool:
+            if win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd):
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                if pid in pids and not win32gui.GetWindow(hwnd, win32con.GW_OWNER):
+                    windows.append(hwnd)
+            return True
+
+        win32gui.EnumWindows(collect, None)  # kolejność Z: od ostatnio używanego
+        hwnd = pick_window(windows, win32gui.GetForegroundWindow(), cycle)
+        if hwnd is None:
+            return False  # proces działa w tle bez okna – uruchomimy nową instancję
+        try:
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            # Windows blokuje SetForegroundWindow z tła; naciśnięcie Alt to obchodzi.
+            import win32api
+
+            win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+            win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+            win32gui.SetForegroundWindow(hwnd)
+        except Exception as exc:
+            log.debug("Nie udało się przełączyć okna: %s", exc)
+        return True
+
+    def open_path(self, path: str) -> None:
+        if not os.path.exists(path):
+            raise PlatformError(f"nie istnieje: {path}")
+        os.startfile(path)  # type: ignore[attr-defined]
+
+    def open_url(self, url: str, browser: str = "") -> None:
+        if browser:
+            os.startfile(browser, "open", url)  # type: ignore[attr-defined,call-arg]
+        else:
+            os.startfile(url)  # type: ignore[attr-defined]
+
+    # ------------------------------------------------------------------ dźwięk
+
+    @staticmethod
+    def _endpoint() -> Any:
+        from pycaw.pycaw import AudioUtilities
+
+        speakers = AudioUtilities.GetSpeakers()
+        endpoint = getattr(speakers, "EndpointVolume", None)
+        if endpoint is not None:
+            return endpoint
+        # Starsze pycaw
+        from comtypes import CLSCTX_ALL
+        from pycaw.pycaw import IAudioEndpointVolume
+
+        interface = speakers.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        return interface.QueryInterface(IAudioEndpointVolume)
+
+    def get_system_volume(self) -> float | None:
+        try:
+            return float(self._endpoint().GetMasterVolumeLevelScalar()) * 100
+        except Exception as exc:
+            log.debug("Głośność niedostępna: %s", exc)
+            return None
+
+    def change_system_volume(self, delta: float) -> float | None:
+        try:
+            endpoint = self._endpoint()
+            value = float(endpoint.GetMasterVolumeLevelScalar()) * 100
+            value = max(0.0, min(100.0, value + delta))
+            endpoint.SetMasterVolumeLevelScalar(value / 100, None)
+            if delta > 0 and endpoint.GetMute():
+                endpoint.SetMute(0, None)
+            return value
+        except Exception as exc:
+            log.debug("Zmiana głośności nieudana: %s", exc)
+            return None
+
+    def toggle_system_mute(self) -> bool | None:
+        try:
+            endpoint = self._endpoint()
+            muted = not bool(endpoint.GetMute())
+            endpoint.SetMute(int(muted), None)
+            return muted
+        except Exception as exc:
+            log.debug("Wyciszenie nieudane: %s", exc)
+            return None
+
+    @staticmethod
+    def _sessions(exe_name: str) -> list[Any]:
+        from pycaw.pycaw import AudioUtilities
+
+        target = exe_name.lower()
+        return [
+            s
+            for s in AudioUtilities.GetAllSessions()
+            if s.Process is not None and s.Process.name().lower() == target
+        ]
+
+    def change_app_volume(self, exe_name: str, delta: float) -> float | None:
+        sessions = self._sessions(exe_name)
+        if not sessions:
+            return None
+        current = float(sessions[0].SimpleAudioVolume.GetMasterVolume()) * 100
+        value = max(0.0, min(100.0, current + delta))
+        for session in sessions:
+            session.SimpleAudioVolume.SetMasterVolume(value / 100, None)
+            if delta > 0 and session.SimpleAudioVolume.GetMute():
+                session.SimpleAudioVolume.SetMute(0, None)
+        return value
+
+    def toggle_app_mute(self, exe_name: str) -> bool | None:
+        sessions = self._sessions(exe_name)
+        if not sessions:
+            return None
+        muted = not bool(sessions[0].SimpleAudioVolume.GetMute())
+        for session in sessions:
+            session.SimpleAudioVolume.SetMute(int(muted), None)
+        return muted
+
+    def list_audio_processes(self) -> list[str]:
+        from pycaw.pycaw import AudioUtilities
+
+        names = {s.Process.name() for s in AudioUtilities.GetAllSessions() if s.Process is not None}
+        return sorted(names, key=str.lower)
+
+    # ------------------------------------------------------------------ polecenia i system
+
+    def run_shell(self, command: str, shell: str, timeout_s: float, hidden: bool) -> int:
+        if shell == "powershell":
+            argv = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command]
+        elif shell in ("sh", "bash", "zsh"):
+            # profil z macOS/Linuksa: działa, jeśli jest Git Bash / WSL w PATH
+            exe = shutil.which(shell) or shutil.which("bash")
+            if exe is None:
+                raise PlatformError(f"powłoka {shell} nie jest dostępna w tym systemie")
+            argv = [exe, "-c", command]
+        else:
+            argv = ["cmd", "/c", command]
+        flags = CREATE_NO_WINDOW if hidden else CREATE_NEW_CONSOLE
+        try:
+            result = subprocess.run(argv, timeout=timeout_s, creationflags=flags, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise PlatformError(f"przekroczono limit czasu {timeout_s} s") from exc
+        return result.returncode
+
+    def lock_screen(self) -> None:
+        ctypes.windll.user32.LockWorkStation()
+
+    def screen_off(self) -> None:
+        hwnd_broadcast, wm_syscommand, sc_monitorpower = 0xFFFF, 0x0112, 0xF170
+        ctypes.windll.user32.PostMessageW(hwnd_broadcast, wm_syscommand, sc_monitorpower, 2)
+
+    def foreground_process(self) -> str | None:
+        import win32gui
+        import win32process
+
+        hwnd = win32gui.GetForegroundWindow()
+        if not hwnd:
+            return None
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        try:
+            return str(psutil.Process(pid).name())
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+
+    # ------------------------------------------------------------------ autostart
+
+    def get_autostart(self) -> bool:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+                winreg.QueryValueEx(key, RUN_VALUE)
+                return True
+        except OSError:
+            return False
+
+    def set_autostart(self, enabled: bool, command: str) -> None:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            if enabled:
+                winreg.SetValueEx(key, RUN_VALUE, 0, winreg.REG_SZ, command)
+            else:
+                with contextlib.suppress(FileNotFoundError):
+                    winreg.DeleteValue(key, RUN_VALUE)
