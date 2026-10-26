@@ -10,8 +10,8 @@ Wspólne zasady:
 - Każda wiadomość ma pole `type` (string).
 - Nieznane pola są **ignorowane** (kompatybilność wsteczna). Nieznane typy wiadomości
   również są ignorowane (bez odpowiedzi, nawet jeśli mają `id`).
-- Maksymalna długość linii wysyłanej do urządzenia: **1024 bajty** (łącznie z `\n`), chyba że
-  `hello` podaje mniejsze `max_line` (Pro Micro: 272). Dłuższa linia jest odrzucana w całości,
+- Maksymalna długość linii wysyłanej do urządzenia: wartość `max_line` z `hello` – w ChocPilot
+  **272 bajty** (łącznie z `\n`; brak pola = 1024). Dłuższa linia jest odrzucana w całości,
   urządzenie odpowiada `{"type":"error","msg":"line too long"}` bez `id`.
 - Niepoprawny JSON (lub brak `type`) → `{"type":"error","msg":"..."}` (bez `id`);
   urządzenie nie zawiesza się i czeka na kolejną linię.
@@ -21,25 +21,23 @@ Wspólne zasady:
 
 ### `hello`
 ```json
-{"type":"hello","device":"chocpilot","fw":"1.0.0","board":"kb2040","keys":10,"encoder":true,"hid":true,"online":false}
+{"type":"hello","device":"chocpilot","fw":"1.0.0","board":"promicro","keys":8,"encoder":false,"hid":true,"online":false,"max_line":272}
 ```
-- `board`: `"kb2040"`, `"xiao_esp32s3"` lub `"promicro"`.
-- `keys`: liczba klawiszy (9 w matrycy + przycisk enkodera = 10).
+- `board`: `"promicro"` (Arduino Pro Micro, ATmega32U4).
+- `keys`: liczba klawiszy – 8 (matryca 2×4). `encoder`: zawsze `false` (ChocPilot nie ma pokrętła).
 - `hid`: urządzenie ma interfejs HID (tryb awaryjny).
 - `online` (informacyjnie): czy urządzenie uważa aplikację za połączoną.
-- `oled` (od fw 1.0.1): adres I²C, pod którym odpowiada ekran (np. `60` = 0x3C), albo `null`,
-  gdy ekran nie odpowiada. Firmware przy starcie sam wybiera 0x3C lub 0x3D, jeśli ustawiony adres
-  nie odpowiada.
-- `i2c` (od fw 1.0.1): lista adresów wszystkich urządzeń znalezionych na magistrali I²C (maks. 8).
-- `lines` (od fw 1.0.3, tylko programowe I²C): `{"sda":0|1,"scl":0|1}` – stan linii zmierzony bez
-  wewnętrznego podciągania (1 = moduł zasilony i ma pull-upy).
-- `swapped` (od fw 1.0.3): `true`, gdy ekran odpowiedział dopiero po zamianie SDA i SCL
-  (firmware używa wtedy zamienionych pinów).
-- `max_line` (tylko płytki z małą pamięcią, np. Pro Micro: `272`): maksymalna długość linii do
-  urządzenia w bajtach, łącznie z `\n`. Brak pola = 1024. Aplikacja dzieli wtedy `set_fallback`
-  na kilka wiadomości (pierwsza z `replace: true`, kolejne z `replace: false`). Na takich płytkach
-  tytuły i etykiety są dodatkowo skracane do 21 / 9 bajtów UTF-8, a ekran pokazuje tylko ASCII
-  (polskie litery bez ogonków).
+- `oled`: adres I²C, pod którym odpowiada ekran (np. `60` = 0x3C), albo `null`, gdy ekran nie
+  odpowiada. Firmware przy starcie sam wybiera 0x3C lub 0x3D, jeśli ustawiony adres nie odpowiada.
+- `i2c`: lista adresów wszystkich urządzeń znalezionych na magistrali I²C (maks. 8).
+- `lines`: `{"sda":0|1,"scl":0|1}` – stan linii zmierzony przy starcie bez wewnętrznego
+  podciągania (1 = moduł zasilony i ma pull-upy).
+- `swapped`: `true`, gdy ekran odpowiedział dopiero po zamianie SDA i SCL (firmware obsługuje go
+  wtedy programowym I²C na zamienionych pinach).
+- `max_line`: maksymalna długość linii do urządzenia w bajtach, łącznie z `\n` (ChocPilot: 272).
+  Aplikacja dzieli dłuższe `set_fallback` na kilka wiadomości (pierwsza z `replace: true`, kolejne
+  z `replace: false`). Tytuły i etykiety są w urządzeniu skracane do 21 / 11 bajtów UTF-8, a ekran
+  pokazuje tylko ASCII (polskie litery bez ogonków).
 
 Wysyłane: po starcie, w odpowiedzi na `hello` od PC i na `get_info`.
 
@@ -47,16 +45,8 @@ Wysyłane: po starcie, w odpowiedzi na `hello` od PC i na `get_info`.
 ```json
 {"type":"key","key":3,"action":"down","t":123456}
 ```
-- `key`: 1–9 = klawisze matrycy (K1…K9), **10 = przycisk enkodera**.
+- `key`: 1–8 (K1…K4 – górny rząd, K5…K8 – dolny).
 - `action`: `"down"` | `"up"` (po debounce).
-
-### `enc`
-```json
-{"type":"enc","steps":-2,"t":123470}
-```
-- `steps`: liczba ząbków (detentów) od poprzedniej wiadomości `enc`; plus = obrót w prawo (CW),
-  minus = w lewo (CCW). Uwzględnia ustawienie `enc_reverse`.
-- Urządzenie agreguje kroki i wysyła `enc` najwyżej co ~10 ms.
 
 ### `ack` / `error`
 ```json
@@ -110,7 +100,7 @@ poprzedniego trybu trwałego.
 
 ```json
 {"type":"display","mode":"profile","name":"Stream"}
-{"type":"display","mode":"grid","title":"Domyślny","labels":["Calc","Notes","Pliki","WWW","Kopiuj","Wklej","Play","<","Profil"]}
+{"type":"display","mode":"grid","title":"Domyślny","labels":["Kalk","Notes","Kopiuj","Wklej","Głos -","Głos +","Play","Wycisz"]}
 {"type":"display","mode":"text","line1":"Hello","line2":"world","ms":2000}
 {"type":"display","mode":"bar","title":"Głośność","value":42,"ms":1500}
 ```
@@ -118,13 +108,13 @@ poprzedniego trybu trwałego.
 |---|---|---|
 | `name` | profile | 21 znaków |
 | `title` | grid, bar | 21 znaków |
-| `labels` | grid | 9 napisów, każdy do **7 znaków**; brakujące = puste |
+| `labels` | grid | 8 napisów (K1–K8), każdy do **10 znaków**; brakujące = puste. Na ekranie: do 6 znaków w wierszu, dłuższe w 2 wierszach (podział na spacji) |
 | `line1`, `line2` | text | po 21 znaków |
 | `value` | bar | 0–100 (przycinane) |
 | `ms` | text, bar | 0 = bez limitu (tryb staje się trwały, ale nie jest zapisywany) |
 
-Dłuższe napisy są obcinane. Czcionki urządzenia obsługują ASCII; znaki spoza ASCII
-aplikacja **transliteruje** (ą→a, ł→l, …) przed wysłaniem.
+Dłuższe napisy są obcinane. Krój urządzenia obsługuje ASCII; znaki spoza ASCII
+aplikacja **transliteruje** (ą→a, ł→l, …) przed wysłaniem (firmware robi to samo dla polskich liter).
 
 ### `flash`
 ```json
@@ -138,15 +128,13 @@ Częściowa aktualizacja ustawień (podaj tylko zmieniane pola). Ustawienia są 
 w pamięci nieulotnej.
 
 ```json
-{"type":"settings","id":3,"brightness":128,"screensaver_s":300,"flip":false,"enc_reverse":false,"enc_pulses":4,"debounce_ms":8}
+{"type":"settings","id":3,"brightness":128,"screensaver_s":300,"flip":false,"debounce_ms":8}
 ```
 | Pole | Typ | Zakres | Domyślnie |
 |---|---|---|---|
 | `brightness` | int | 0–255 (kontrast OLED) | 128 |
 | `screensaver_s` | int | 0–65535, 0 = wyłączony | 300 |
 | `flip` | bool | obrót ekranu o 180° | false |
-| `enc_reverse` | bool | odwrócenie kierunku pokrętła | false |
-| `enc_pulses` | int | 1–8 impulsów (zmian stanu A/B) na ząbek | 4 |
 | `debounce_ms` | int | 1–50 | 8 |
 | `oled_addr` | int | adres I²C OLED (0x3C / 0x3D), działa po restarcie | 0x3C |
 
@@ -157,15 +145,15 @@ Skróty HID dla trybu awaryjnego (offline). Można wysłać pojedyncze przypisan
 
 ```json
 {"type":"set_fallback","key":1,"mods":["ctrl","shift"],"code":"c"}
-{"type":"set_fallback","key":10,"media":"mute"}
+{"type":"set_fallback","key":8,"media":"mute"}
 {"type":"set_fallback","replace":true,"bindings":[
-  {"key":"enc_cw","media":"vol_up"},
-  {"key":"enc_ccw","media":"vol_down"},
-  {"key":10,"media":"mute"},
+  {"key":5,"media":"vol_down"},
+  {"key":6,"media":"vol_up"},
+  {"key":8,"media":"mute"},
   {"key":2,"mods":["ctrl"],"code":"v"}
 ]}
 ```
-- `key`: 1–10 lub `"enc_cw"` / `"enc_ccw"`.
+- `key`: 1–8.
 - `mods`: lista z `ctrl`, `shift`, `alt`, `win` (alias `gui`, `meta`), opcjonalnie z prefiksem
   `r` dla prawego (`rctrl`, `rshift`, `ralt`, `rwin`).
 - `code`: nazwa klawisza (patrz niżej) albo liczba – surowy kod HID Usage (Keyboard page 0x07).
@@ -180,26 +168,25 @@ Nazwy klawiszy (`code`): `a`–`z`, `0`–`9`, `f1`–`f24`, `enter`, `esc`, `ba
 `numlock`, `kp_0`–`kp_9`, `kp_plus`, `kp_minus`, `kp_multiply`, `kp_divide`, `kp_enter`,
 `kp_period`, `menu`. Pojedyncze znaki `-` `=` `[` `]` `\` `;` `'` `` ` `` `,` `.` `/` też są akceptowane.
 
-Domyślne przypisania (gdy nic nie zapisano): pokrętło CW = `vol_up`, CCW = `vol_down`,
-przycisk enkodera = `mute`, klawisze 1–9 bez przypisania.
+Domyślne przypisania (gdy nic nie zapisano): K5 = `vol_down`, K6 = `vol_up`,
+K7 = `play_pause`, K8 = `mute`, klawisze 1–4 bez przypisania.
 
 ### `reboot`
 ```json
 {"type":"reboot"}
 {"type":"reboot","bootloader":true}
 ```
-`bootloader: true`: ESP32-S3 → tryb pobierania ROM (USB DFU/JTAG-serial), RP2040 → dysk
-`RPI-RP2` (UF2), ATmega32U4 (Pro Micro) → bootloader Caterina na ok. 8 s (nowy port COM,
-wgrywanie avrdude / `pio run -e promicro -t upload`). Urządzenie wysyła `ack` (jeśli było `id`)
-przed restartem.
+`bootloader: true`: restart do bootloadera Caterina na ok. 8 s (nowy port COM, wgrywanie
+avrdude / `pio run -e promicro -t upload`). Urządzenie wysyła `ack` (jeśli było `id`) przed
+restartem.
 
 ### `test_mode`
 ```json
 {"type":"test_mode","enable":true}
 ```
-Włącza/wyłącza tryb testu sprzętu (ekran na żywo pokazuje stan klawiszy i licznik enkodera).
-Tryb można też włączyć, trzymając **K1 + K3 przez 3 s zaraz po starcie**; wyłączyć – komendą
-albo ponownym przytrzymaniem K1 + K3 przez 3 s.
+Włącza/wyłącza tryb testu sprzętu (ekran na żywo pokazuje stan 8 klawiszy).
+Tryb można też włączyć, trzymając **K1 + K4 przez 3 s zaraz po starcie**; wyłączyć – komendą
+albo ponownym przytrzymaniem K1 + K4 przez 3 s.
 
 ### `debug`
 ```json
@@ -215,21 +202,22 @@ Włącza wysyłanie wiadomości `log`.
 | online | odebrano poprawną wiadomość w ciągu ostatnich 3 s | HID **wyłączony**, ekran wg `display` |
 | offline | brak wiadomości przez 3 s | HID wysyła skróty `set_fallback`, ekran „Offline” |
 
-Zdarzenia `key` i `enc` są wysyłane **zawsze**, także offline. Przy przejściu offline → online
+Zdarzenia `key` są wysyłane **zawsze**, także offline. Przy przejściu offline → online
 urządzenie zwalnia wszystkie wciśnięte klawisze HID (brak „zawieszonych” klawiszy i zdublowanych akcji).
 
 ## Przykładowa sesja
 
 ```
 PC  → {"type":"hello","app":"1.0.0"}
-DEV → {"type":"hello","device":"chocpilot","fw":"1.0.0","board":"kb2040","keys":10,"encoder":true,"hid":true,"online":true}
+DEV → {"type":"hello","device":"chocpilot","fw":"1.0.0","board":"promicro","keys":8,"encoder":false,"hid":true,"online":true,"max_line":272}
 PC  → {"type":"settings","id":1,"brightness":200}
 DEV → {"type":"ack","id":1}
-PC  → {"type":"display","mode":"grid","title":"Domyslny","labels":["Calc","Notes","Pliki","WWW","Kopiuj","Wklej","Play","<","Profil"]}
+PC  → {"type":"display","mode":"grid","title":"Domyslny","labels":["Kalk","Notes","Kopiuj","Wklej","Glos -","Glos +","Play","Wycisz"]}
 DEV → {"type":"key","key":1,"action":"down","t":5021}
 DEV → {"type":"key","key":1,"action":"up","t":5130}
-PC  → {"type":"flash","key":1,"text":"Calc","ms":1000}
-DEV → {"type":"enc","steps":2,"t":6000}
+PC  → {"type":"flash","key":1,"text":"Kalk","ms":800}
+DEV → {"type":"key","key":6,"action":"down","t":6000}
+DEV → {"type":"key","key":6,"action":"up","t":6090}
 PC  → {"type":"display","mode":"bar","title":"Glosnosc","value":54,"ms":1500}
 PC  → {"type":"ping"}
 ```

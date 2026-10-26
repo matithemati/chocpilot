@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chocpilot"
 version = "1.0.0"
-description = "ChocPilot – aplikacja konfiguracyjna macropada 3×3 z pokrętłem i ekranem OLED"
+description = "ChocPilot – aplikacja konfiguracyjna macropada 2×4 (Kailh Choc) z ekranem OLED 2,42\""
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
