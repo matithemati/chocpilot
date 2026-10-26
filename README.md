@@ -89,9 +89,17 @@ ATmega32U4 ma **2,5 KB RAM i 28 KB flash** (z bootloaderem Caterina). Zużycie (
 
 ### Wgrywanie
 
-```bash
-pio run -e promicro -t upload
+Skrypt `firmware\flash.ps1` znajduje PlatformIO (PATH, `%USERPROFILE%\.platformio`, a w razie
+potrzeby instaluje go przez pip), sprawdza, czy aplikacja nie trzyma portu, kompiluje i wgrywa:
+
+```powershell
+cd firmware
+.\flash.ps1
 ```
+
+Opcje: `-Board 3v3` (Pro Micro 3,3 V/8 MHz), `-Port COM7` (konkretny port), `-BuildOnly`
+(tylko kompilacja, wynik w `.pio\build\promicro\firmware.hex`), `-CloseApp` (zamyka działającą
+aplikację ChocPilot). Bez skryptu: `pio run -e promicro -t upload`.
 
 Najpierw zamknij aplikację ChocPilot (trzyma port COM). PlatformIO otwiera port z prędkością
 1200 bps („1200 bps touch”), płytka restartuje się do bootloadera **Caterina** (osobny port COM
@@ -188,10 +196,13 @@ automatycznie z pól modelu.
 
 ## Obudowa (OpenSCAD)
 
-`case/chocpilot_case.scad` – obudowa ok. 90 × 128 mm: rząd K1–K4, pod nim ekran 2,42" poziomo
-na podwyższonym, fazowanym pokładzie, pod nim rząd K5–K8. Moduł OLED przykręca się od spodu do
-słupków w pokładzie (wkręty M2,5) i łączy przewodem ze złączem J1 na płytce; płytka leży na
-słupkach dna (M2), Pro Micro od spodu, USB wychodzi prawą ścianką.
+`case/chocpilot_case.scad` – obudowa 90,3 × 127,8 mm dopasowana do płytki z KiCad
+(`esp_macropad/pcb/tap32/tap32.kicad_pcb`: obrys 79,5 × 117 mm, 5 otworów M3, Choc V1 w rastrze
+19,05 mm, Pro Micro poziomo przy prawej krawędzi, J1 = JST XH 4-pin pionowe). Rząd K1–K4, pod
+nim ekran 2,42" poziomo na podwyższonym, fazowanym pokładzie, pod nim rząd K5–K8. Moduł OLED
+przykręca się od spodu do słupków w pokładzie (wkręty M2,5) i łączy przewodem z J1; płytka leży
+na 5 słupkach dna (M3), Pro Micro od spodu (wystaje 1,9 mm poza PCB – kieszeń w prawej
+ściance), USB wychodzi prawą ścianką.
 
 ```bash
 openscad -D part=\"shell\" -o chocpilot_shell.stl case/chocpilot_case.scad
@@ -202,13 +213,14 @@ openscad -D part=\"bottom\" -o chocpilot_bottom.stl case/chocpilot_case.scad
 ```
 
 Części: `shell`, `bottom`; podgląd: `assembly`, `exploded`. Wysokość: 20 mm przy klawiszach,
-27,6 mm przy ekranie (z 8 mm na złącze i przewody pod modułem – `oled_back_clear`).
+30 mm przy ekranie – pod pokładem musi zmieścić się wtyk XH w J1 z przewodami (`j1_clear` = 14 mm
+nad PCB). Z niższym złączem (np. przewody wlutowane) zmniejsz `j1_clear`, a pokład się obniży.
 
-**Przed drukiem sprawdź parametry z sekcji „ZAŁOŻENIA”** – obudowa powstała z rozmieszczenia
-klawiszy (kbplacer), bo plik `.kicad_pcb` nie był zapisany: obrys płytki (klawisze + 1,5 mm),
-4 otwory M2 w szczelinie ekranu, Pro Micro poziomo przy prawej krawędzi w środku szczeliny
-(USB w prawo) oraz wymiary modułu OLED (płytka 70 × 43 mm, otwory 65 × 38 mm, szkło
-60,5 × 37 mm) – zmierz swój moduł.
+**Przed drukiem zmierz moduł OLED** – jego wymiary to nadal założenia (płytka 70 × 43 mm,
+otwory Ø3 w rozstawie 65 × 38 mm, szkło 60,5 × 37 × 2 mm, obszar aktywny 55,01 × 27,49 mm,
+wszystko wyśrodkowane). Słupki mieszczą się tylko ok. 0,75 mm od szkła. Zakładany jest też
+montaż Pro Micro od spodu płytki (elementy w dół) – przy montażu od góry trzeba zmienić
+`standoff_h`, wycięcie USB i miejsce pod modułem.
 
 ## Rozwiązywanie problemów
 
