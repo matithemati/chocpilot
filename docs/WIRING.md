@@ -3,6 +3,10 @@
 Źródło prawdy: schemat płytki [schematic.png](schematic.png) i mapa pinów
 `firmware/src/boards/board.h`.
 
+Płytka (wersja kompaktowa, 79,5 × 88,75 mm): rzędy klawiszy 67 mm od siebie (środki), między
+nimi ekran 2,42" – ten sam odstęp od obu rzędów. Podgląd ścieżek:
+[img/pcb_compact.png](img/pcb_compact.png).
+
 ## Matryca 2×4 (COL2ROW, Kailh Choc)
 
 Każdy przełącznik Kailh Choc (S1–S8) ma szeregowo diodę **1N4148** (D1–D8). Układ **COL2ROW**:
@@ -83,9 +87,12 @@ a szkło panelu 60,5 × 37 × 2 mm z obszarem aktywnym 55,01 × 27,49 mm na śro
 - **I²C zamiast SPI.** Wersja 7-pinowa jest fabrycznie ustawiona na SPI; tryb I²C wybiera się
   zworkami/rezystorami na odwrocie – według opisu nadrukowanego na module lub karty sprzedawcy
   (RES trzeba wtedy podciągnąć do VCC). Wersja 4-pinowa jest od razu w I²C.
-- **Przewód do J1.** J1 (JST XH 4-pin) leży tuż pod dolną krawędzią modułu; obudowa przesuwa
-  moduł tak, by zostały ≥ 2 mm odstępu (wersja 4-pinowa: o 2,7 mm w górę od środka szczeliny).
-  Kolejność żył dopasuj do nadruku modułu – J1 ma GND, +5 V, SDA, SCL.
+- **Przewody do J1 (bez złącza).** Moduł wisi 2 mm nad płytką, a J1 leży pod nim – przylutuj
+  cienkie przewody (AWG 28–30) do pinów modułu od spodu i do pól J1, bez złącza XH. Kolejność
+  żył dopasuj do nadruku modułu – J1 ma GND, +5 V, SDA, SCL. Złącze na dolnej krawędzi modułu
+  4-pinowego (od spodu) zdejmij, jeśli jest wyższe niż 2 mm.
+- **Pod modułem płasko.** Piny Pro Micro od góry przycięte równo z lutem; wkręty płytki M3
+  z niskim łbem (ISO 7380, łeb 1,65 mm), bo otwory H1–H5 są pod modułem.
 - **Sterownik.** Firmware używa `u8x8_d_ssd1309_128x64_noname2` (najczęstsze moduły 2,42").
   Jeśli obraz jest przesunięty o 2 kolumny albo pojawiają się śmieci przy krawędzi, zmień na
   `noname0` w `firmware/src/mini_gfx.cpp`.

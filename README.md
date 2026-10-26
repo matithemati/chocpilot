@@ -198,13 +198,22 @@ automatycznie z pól modelu.
 
 ## Obudowa (OpenSCAD)
 
-`case/chocpilot_case.scad` – obudowa 90,3 × 127,8 mm dopasowana do płytki z KiCad
-(`esp_macropad/pcb/tap32/tap32.kicad_pcb`: obrys 79,5 × 117 mm, 5 otworów M3, Choc V1 w rastrze
-19,05 mm, Pro Micro poziomo przy prawej krawędzi, J1 = JST XH 4-pin pionowe). Rząd K1–K4, pod
-nim ekran 2,42" poziomo na podwyższonym, fazowanym pokładzie, pod nim rząd K5–K8. Moduł OLED
-przykręca się od spodu do słupków w pokładzie (wkręty M2,5) i łączy przewodem z J1; płytka leży
-na 5 słupkach dna (M3), Pro Micro od spodu (wystaje 1,9 mm poza PCB – kieszeń w prawej
-ściance), USB wychodzi prawą ścianką.
+`case/chocpilot_case.scad` – obudowa **90,3 × 99,6 × 20 mm** z płaską górą, dopasowana do
+kompaktowej płytki z KiCad (`esp_macropad/pcb/tap32/tap32.kicad_pcb`, podgląd:
+[docs/img/pcb_compact.png](docs/img/pcb_compact.png)): obrys 79,5 × 88,75 mm, rzędy klawiszy
+67 mm od siebie, ekran 2,42" poziomo dokładnie pośrodku (ten sam odstęp od obu rzędów).
+Moduł OLED wisi 2 mm nad płytką, przykręcony od spodu do płyty obudowy (4× M2,5×4); szkło leży
+w otworze 0,4 mm poniżej powierzchni – nic nie wystaje. Płytka leży na 5 słupkach dna (M3),
+Pro Micro od spodu (wystaje 1,9 mm poza PCB – kieszeń w prawej ściance), USB wychodzi prawą
+ścianką. Skorupa drukuje się górą w dół bez podpór.
+
+Pod modułem musi być płasko (2 mm wolnego miejsca):
+
+- wkręty płytki **M3 z niskim łbem** (ISO 7380 / „button head”, łeb 1,65 mm) – wszystkie
+  otwory H1–H5 leżą pod modułem,
+- piny Pro Micro od góry płytki **przycięte równo z lutem**,
+- moduł połączony **przewodami** (cienkie, np. AWG 28–30) z polami J1 – bez złącza XH;
+  złącze na dolnej krawędzi modułu 4-pinowego (od spodu) zdejmij, jeśli jest wyższe niż 2 mm.
 
 ```bash
 openscad -D part=\"shell\" -o chocpilot_shell.stl case/chocpilot_case.scad
@@ -214,15 +223,14 @@ openscad -D part=\"shell\" -o chocpilot_shell.stl case/chocpilot_case.scad
 openscad -D part=\"bottom\" -o chocpilot_bottom.stl case/chocpilot_case.scad
 ```
 
-Części: `shell`, `bottom`; podgląd: `assembly`, `exploded`. Wysokość: 20 mm przy klawiszach,
-30 mm przy ekranie – pod pokładem musi zmieścić się wtyk XH w J1 z przewodami (`j1_clear` = 14 mm
-nad PCB). Z niższym złączem (np. przewody wlutowane) zmniejsz `j1_clear`, a pokład się obniży.
+Części: `shell`, `bottom`; podgląd: `assembly`, `exploded`.
 
 **Moduł OLED:** ShengYang 2,42", wersja wybierana parametrem `oled_variant` – `i2c_4pin`
 (domyślnie, 70,10 × 48,10 mm) albo `spi_7pin` (72 × 43 mm). Wymiary płytek są z karty
 sprzedawcy, ale rozstaw otworów (ok. 3 mm od krawędzi) i położenie szkła są oszacowane –
-**zmierz moduł przed drukiem**. Słupki mieszczą się tylko 0,35–0,55 mm od szkła; plik
-sprawdza to (i zmieszczenie modułu pod pokładem) asercjami przy renderowaniu. Zakładany jest też
+**zmierz moduł przed drukiem**. Plik sprawdza asercjami przy renderowaniu, że szkło nie
+wystaje, moduł nie nachodzi na przełączniki i że wokół wkrętów modułu zostaje materiał płyty
+(1,6 mm do otworów na klawisze, 1,2 mm do otworu na szkło). Zakładany jest też
 montaż Pro Micro od spodu płytki (elementy w dół) – przy montażu od góry trzeba zmienić
 `standoff_h`, wycięcie USB i miejsce pod modułem.
 
