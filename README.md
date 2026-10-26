@@ -186,11 +186,29 @@ Nowy typ akcji: klasa dziedzicząca po `ActionBase` z polem `type: Literal["nazw
 `run(ctx)` i dekoratorem `@register_action("nazwa", "Etykieta")`. Formularz w GUI tworzy się
 automatycznie z pól modelu.
 
-## Obudowa
+## Obudowa (OpenSCAD)
 
-Jeszcze jej nie ma – obudowy Tap32 (OpenSCAD) były dla klawiszy MX 3×3 i enkodera EC11.
-Do zaprojektowania potrzebny jest obrys płytki ChocPilot (Choc: otwór 13,8 mm, rozstaw
-18 × 17 mm) i położenie modułu OLED 2,42".
+`case/chocpilot_case.scad` – obudowa ok. 90 × 128 mm: rząd K1–K4, pod nim ekran 2,42" poziomo
+na podwyższonym, fazowanym pokładzie, pod nim rząd K5–K8. Moduł OLED przykręca się od spodu do
+słupków w pokładzie (wkręty M2,5) i łączy przewodem ze złączem J1 na płytce; płytka leży na
+słupkach dna (M2), Pro Micro od spodu, USB wychodzi prawą ścianką.
+
+```bash
+openscad -D part=\"shell\" -o chocpilot_shell.stl case/chocpilot_case.scad
+```
+
+```bash
+openscad -D part=\"bottom\" -o chocpilot_bottom.stl case/chocpilot_case.scad
+```
+
+Części: `shell`, `bottom`; podgląd: `assembly`, `exploded`. Wysokość: 20 mm przy klawiszach,
+27,6 mm przy ekranie (z 8 mm na złącze i przewody pod modułem – `oled_back_clear`).
+
+**Przed drukiem sprawdź parametry z sekcji „ZAŁOŻENIA”** – obudowa powstała z rozmieszczenia
+klawiszy (kbplacer), bo plik `.kicad_pcb` nie był zapisany: obrys płytki (klawisze + 1,5 mm),
+4 otwory M2 w szczelinie ekranu, Pro Micro poziomo przy prawej krawędzi w środku szczeliny
+(USB w prawo) oraz wymiary modułu OLED (płytka 70 × 43 mm, otwory 65 × 38 mm, szkło
+60,5 × 37 mm) – zmierz swój moduł.
 
 ## Rozwiązywanie problemów
 
