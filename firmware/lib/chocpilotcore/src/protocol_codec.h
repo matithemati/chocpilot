@@ -1,6 +1,5 @@
 // Kodowanie i dekodowanie wiadomości protokołu ChocPilot (JSON Lines), patrz docs/PROTOCOL.md.
-// Czysta logika – bez Arduino, testowana w środowisku native. Implementacje: protocol_codec.cpp
-// (ArduinoJson) i protocol_codec_compact.cpp (CHOCPILOT_COMPACT: bez alokacji, dla małej pamięci).
+// Czysta logika – bez Arduino, testowana w środowisku native. Parser bez alokacji (2,5 KB RAM).
 #pragma once
 
 #include <stddef.h>
@@ -11,12 +10,8 @@
 
 namespace chocpilot {
 
-#if defined(CHOCPILOT_COMPACT)
 // Bufor odbioru ATmega32U4. Limit trafia do hello (max_line), aplikacja dzieli dłuższe komendy.
 constexpr size_t kMaxLineLength = 272;
-#else
-constexpr size_t kMaxLineLength = 1024;
-#endif
 
 enum class CommandType : uint8_t {
   Unknown = 0,
@@ -35,20 +30,14 @@ enum class CommandType : uint8_t {
 struct DisplayCommand {
   DisplayMode mode = DisplayMode::None;
   char title[kTitleBuf] = {0};  // grid/bar: tytuł, profile: nazwa
-#if defined(CHOCPILOT_COMPACT)
   // Mało RAM: etykiety (tylko grid) i wiersze tekstu (tylko text) dzielą pamięć.
   union {
-    char labels[kMatrixKeys][kLabelBuf] = {{0}};
+    char labels[kTotalKeys][kLabelBuf] = {{0}};
     struct {
       char line1[kTitleBuf];
       char line2[kTitleBuf];
     };
   };
-#else
-  char labels[kMatrixKeys][kLabelBuf] = {{0}};
-  char line1[kTitleBuf] = {0};
-  char line2[kTitleBuf] = {0};
-#endif
   uint8_t value = 0;
   uint32_t ms = 0;
 };
@@ -65,10 +54,8 @@ struct SettingsPatch {
     kBrightness = 1 << 0,
     kScreensaver = 1 << 1,
     kFlip = 1 << 2,
-    kEncReverse = 1 << 3,
-    kEncPulses = 1 << 4,
-    kDebounce = 1 << 5,
-    kOledAddr = 1 << 6,
+    kDebounce = 1 << 3,
+    kOledAddr = 1 << 4,
   };
   uint16_t mask = 0;
   Settings values;
@@ -126,7 +113,6 @@ struct I2cDiag {
 size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool online,
                   const I2cDiag* diag = nullptr);
 size_t buildKey(char* buf, size_t cap, uint8_t key, bool down, uint32_t t);
-size_t buildEnc(char* buf, size_t cap, int32_t steps, uint32_t t);
 size_t buildAck(char* buf, size_t cap, int32_t id);
 size_t buildError(char* buf, size_t cap, bool hasId, int32_t id, FlashText msg);
 size_t buildLog(char* buf, size_t cap, FlashText level, FlashText msg);

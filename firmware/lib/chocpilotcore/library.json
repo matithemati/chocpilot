@@ -1,10 +1,7 @@
 {
   "name": "chocpilotcore",
   "version": "1.0.0",
-  "description": "ChocPilot: logika niezależna od sprzętu (dekoder enkodera, debounce, protokół, kody HID, konfiguracja)",
+  "description": "ChocPilot: logika niezależna od sprzętu (debounce, protokół, kody HID, konfiguracja)",
   "frameworks": "*",
-  "platforms": "*",
-  "dependencies": {
-    "bblanchon/ArduinoJson": "^7.4.3"
-  }
+  "platforms": "*"
 }

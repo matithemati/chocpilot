@@ -22,30 +22,22 @@ void selectRow(uint8_t pin) {
 void Matrix::begin() {
   for (uint8_t pin : board::kRowPins) releaseRow(pin);
   for (uint8_t pin : board::kColPins) pinMode(pin, INPUT_PULLUP);
-  pinMode(board::kEncSw, INPUT_PULLUP);
   const uint32_t now = millis();
   for (Debouncer& d : keys_) d.reset(false, now);
 }
 
 void Matrix::scan(uint32_t nowMs, uint8_t debounceMs, KeyCallback onChange) {
-  for (uint8_t r = 0; r < 3; ++r) {
+  for (uint8_t r = 0; r < kRows; ++r) {
     selectRow(board::kRowPins[r]);
     delayMicroseconds(kRowSettleUs);
-    for (uint8_t c = 0; c < 3; ++c) {
+    for (uint8_t c = 0; c < kCols; ++c) {
       const bool raw = digitalRead(board::kColPins[c]) == LOW;
-      const uint8_t index = static_cast<uint8_t>(r * 3 + c);
+      const uint8_t index = static_cast<uint8_t>(r * kCols + c);
       if (keys_[index].update(raw, nowMs, debounceMs) && onChange != nullptr) {
         onChange(static_cast<uint8_t>(index + 1), keys_[index].pressed());
       }
     }
     releaseRow(board::kRowPins[r]);
-  }
-
-  // Przycisk enkodera – ten sam debounce co matryca.
-  const bool rawSw = digitalRead(board::kEncSw) == LOW;
-  Debouncer& sw = keys_[kEncoderKey - 1];
-  if (sw.update(rawSw, nowMs, debounceMs) && onChange != nullptr) {
-    onChange(kEncoderKey, sw.pressed());
   }
 }
 

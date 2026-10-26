@@ -54,23 +54,29 @@ void test_hello_without_id() {
 void test_display_grid() {
   ParseResult r = parse(
       "{\"type\":\"display\",\"mode\":\"grid\",\"title\":\"Domyslny\","
-      "\"labels\":[\"Calc\",\"Notatnik123\",null,\"WWW\"]}");
+      "\"labels\":[\"Calc\",\"Notatnik 1234\",null,\"WWW\"]}");
   TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
   TEST_ASSERT_EQUAL(DisplayMode::Grid, cmd.display.mode);
   TEST_ASSERT_EQUAL_STRING("Domyslny", cmd.display.title);
   TEST_ASSERT_EQUAL_STRING("Calc", cmd.display.labels[0]);
-  TEST_ASSERT_EQUAL_STRING("Notatni", cmd.display.labels[1]);  // obcięte do 7 znaków
+  TEST_ASSERT_EQUAL_STRING("Notatnik 1", cmd.display.labels[1]);  // obcięte do 10 znaków
   TEST_ASSERT_EQUAL_STRING("", cmd.display.labels[2]);
   TEST_ASSERT_EQUAL_STRING("WWW", cmd.display.labels[3]);
-  TEST_ASSERT_EQUAL_STRING("", cmd.display.labels[8]);
+  TEST_ASSERT_EQUAL_STRING("", cmd.display.labels[7]);
+  // Więcej etykiet niż klawiszy (8) → błąd.
+  r = parse("{\"type\":\"display\",\"mode\":\"grid\",\"labels\":[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\","
+            "\"7\",\"8\",\"9\"]}");
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, r.status);
 }
 
 void test_display_utf8_truncation() {
-  // 8 znaków, w tym wielobajtowe – obcięcie do 7 bez łamania sekwencji.
+  // Wielobajtowe znaki: bufor etykiety (12 B) kończy się przed 10. znakiem – obcięcie bez
+  // łamania sekwencji.
   ParseResult r = parse(
-      "{\"type\":\"display\",\"mode\":\"grid\",\"labels\":[\"\xC5\x82\xC4\x85" "abcdef\"]}");
+      "{\"type\":\"display\",\"mode\":\"grid\",\"labels\":[\"\xC5\x82\xC4\x85\xC5\x82\xC4\x85"
+      "abcdef\"]}");
   TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
-  TEST_ASSERT_EQUAL_STRING("\xC5\x82\xC4\x85" "abcde", cmd.display.labels[0]);
+  TEST_ASSERT_EQUAL_STRING("\xC5\x82\xC4\x85\xC5\x82\xC4\x85" "abc", cmd.display.labels[0]);
 }
 
 void test_display_bar_and_text() {
@@ -104,7 +110,7 @@ void test_flash() {
   TEST_ASSERT_EQUAL_UINT8(3, cmd.flash.key);
   TEST_ASSERT_EQUAL_STRING("Spotify", cmd.flash.text);
   TEST_ASSERT_EQUAL_UINT32(1200, cmd.flash.ms);
-  r = parse("{\"type\":\"flash\",\"key\":11,\"text\":\"x\"}");
+  r = parse("{\"type\":\"flash\",\"key\":9,\"text\":\"x\"}");
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, r.status);
 }
 
@@ -115,13 +121,13 @@ void test_settings_partial() {
   cmd.settings.applyTo(s);
   TEST_ASSERT_EQUAL_UINT8(200, s.brightness);
   TEST_ASSERT_TRUE(s.flip);
-  TEST_ASSERT_EQUAL_UINT8(4, s.encPulses);  // bez zmian
-  TEST_ASSERT_EQUAL_UINT8(8, s.debounceMs);
+  TEST_ASSERT_EQUAL_UINT8(8, s.debounceMs);  // bez zmian
 }
 
 void test_settings_validation() {
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"settings\",\"brightness\":300}").status);
-  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"settings\",\"enc_pulses\":0}").status);
+  // Ustawienia pokrętła ze starszych aplikacji – nieznane pola są ignorowane.
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, parse("{\"type\":\"settings\",\"enc_pulses\":0}").status);
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"settings\",\"flip\":1}").status);
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"settings\",\"debounce_ms\":\"8\"}").status);
   TEST_ASSERT_EQUAL(ParseStatus::Ok, parse("{\"type\":\"settings\",\"screensaver_s\":0}").status);
@@ -139,8 +145,8 @@ void test_fallback_single() {
 void test_fallback_list_and_replace() {
   ParseResult r = parse(
       "{\"type\":\"set_fallback\",\"replace\":true,\"bindings\":["
-      "{\"key\":\"enc_cw\",\"media\":\"vol_up\"},{\"key\":\"enc_ccw\",\"media\":\"vol_down\"},"
-      "{\"key\":10,\"media\":\"mute\"},{\"key\":2,\"mods\":[\"win\"],\"code\":\"f13\"}]}");
+      "{\"key\":7,\"media\":\"vol_up\"},{\"key\":6,\"media\":\"vol_down\"},"
+      "{\"key\":8,\"media\":\"mute\"},{\"key\":2,\"mods\":[\"win\"],\"code\":\"f13\"}]}");
   TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
   TEST_ASSERT_EQUAL_UINT8(4, cmd.fallback.count);
 
@@ -148,15 +154,18 @@ void test_fallback_list_and_replace() {
   slots[4].code = 0x10;
   cmd.fallback.applyTo(slots);
   TEST_ASSERT_TRUE(slots[4].empty());  // replace wyczyścił
-  TEST_ASSERT_EQUAL_UINT16(kConsumerVolUp, slots[kSlotEncCw].media);
-  TEST_ASSERT_EQUAL_UINT16(kConsumerVolDown, slots[kSlotEncCcw].media);
-  TEST_ASSERT_EQUAL_UINT16(kConsumerMute, slots[9].media);
+  TEST_ASSERT_EQUAL_UINT16(kConsumerVolUp, slots[6].media);
+  TEST_ASSERT_EQUAL_UINT16(kConsumerVolDown, slots[5].media);
+  TEST_ASSERT_EQUAL_UINT16(kConsumerMute, slots[7].media);
   TEST_ASSERT_EQUAL_UINT8(kModLGui, slots[1].mods);
   TEST_ASSERT_EQUAL_UINT8(0x68, slots[1].code);
 }
 
 void test_fallback_errors() {
-  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"set_fallback\",\"key\":11,\"code\":\"a\"}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"set_fallback\",\"key\":9,\"code\":\"a\"}").status);
+  // ChocPilot nie ma pokrętła – sloty enc_cw / enc_ccw są nieznane.
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid,
+                    parse("{\"type\":\"set_fallback\",\"key\":\"enc_cw\",\"media\":\"mute\"}").status);
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"set_fallback\",\"key\":1,\"code\":\"nope\"}").status);
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"set_fallback\",\"key\":1,\"mods\":[\"hyper\"]}").status);
   TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"set_fallback\",\"key\":1,\"code\":\"a\",\"media\":\"mute\"}").status);
@@ -182,38 +191,32 @@ void test_build_messages() {
   size_t n = buildKey(buf, sizeof(buf), 3, true, 1234);
   TEST_ASSERT_EQUAL_STRING("{\"type\":\"key\",\"key\":3,\"action\":\"down\",\"t\":1234}", buf);
   TEST_ASSERT_EQUAL(strlen(buf), n);
-  buildEnc(buf, sizeof(buf), -2, 99);
-  TEST_ASSERT_EQUAL_STRING("{\"type\":\"enc\",\"steps\":-2,\"t\":99}", buf);
   buildAck(buf, sizeof(buf), 7);
   TEST_ASSERT_EQUAL_STRING("{\"type\":\"ack\",\"id\":7}", buf);
   buildError(buf, sizeof(buf), false, 0, "invalid json");
   TEST_ASSERT_EQUAL_STRING("{\"type\":\"error\",\"msg\":\"invalid json\"}", buf);
-  buildHello(buf, sizeof(buf), "kb2040", "1.0.0", false);
+  buildHello(buf, sizeof(buf), "promicro", "1.0.0", false);
   TEST_ASSERT_EQUAL_STRING(
-      "{\"type\":\"hello\",\"device\":\"chocpilot\",\"fw\":\"1.0.0\",\"board\":\"kb2040\","
-      "\"keys\":10,\"encoder\":true,\"hid\":true,\"online\":false"
-#if defined(CHOCPILOT_COMPACT)
-      ",\"max_line\":272"  // tylko płytki z małym buforem odbioru
-#endif
-      "}",
+      "{\"type\":\"hello\",\"device\":\"chocpilot\",\"fw\":\"1.0.0\",\"board\":\"promicro\","
+      "\"keys\":8,\"encoder\":false,\"hid\":true,\"online\":false,\"max_line\":272}",
       buf);
   // Diagnostyka I²C: OLED znaleziony / brak odpowiedzi.
   I2cDiag diag;
   diag.oledAddr = 0x3D;
   diag.count = 1;
   diag.devices[0] = 0x3D;
-  buildHello(buf, sizeof(buf), "kb2040", "1.0.0", true, &diag);
+  buildHello(buf, sizeof(buf), "promicro", "1.0.0", true, &diag);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"oled\":61,\"i2c\":[61]"));
   diag = I2cDiag();
-  buildHello(buf, sizeof(buf), "kb2040", "1.0.0", true, &diag);
+  buildHello(buf, sizeof(buf), "promicro", "1.0.0", true, &diag);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"oled\":null,\"i2c\":[]"));
   diag.sdaLevel = 0;
   diag.sclLevel = 1;
   diag.swapped = true;
-  buildHello(buf, sizeof(buf), "kb2040", "1.0.0", true, &diag);
+  buildHello(buf, sizeof(buf), "promicro", "1.0.0", true, &diag);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"lines\":{\"sda\":0,\"scl\":1},\"swapped\":true"));
   // Za mały bufor → 0.
-  TEST_ASSERT_EQUAL(0, buildHello(buf, 10, "kb2040", "1.0.0", false));
+  TEST_ASSERT_EQUAL(0, buildHello(buf, 10, "promicro", "1.0.0", false));
 }
 
 void test_hid_codes() {
@@ -285,7 +288,7 @@ void test_config_roundtrip() {
   TEST_ASSERT_EQUAL_UINT8(42, back.settings.brightness);
   TEST_ASSERT_TRUE(back.settings.flip);
   TEST_ASSERT_EQUAL_UINT8(kModLCtrl, back.fallback[0].mods);
-  TEST_ASSERT_EQUAL_UINT16(kConsumerMute, back.fallback[9].media);
+  TEST_ASSERT_EQUAL_UINT16(kConsumerMute, back.fallback[7].media);
   TEST_ASSERT_EQUAL(DisplayMode::Grid, back.display.mode);
   TEST_ASSERT_EQUAL_STRING("Stream", back.display.title);
   TEST_ASSERT_EQUAL_STRING("Mic", back.display.labels[4]);
@@ -295,7 +298,7 @@ void test_config_corrupted_uses_defaults() {
   DeviceConfig cfg;
   TEST_ASSERT_FALSE(decodeConfig("{garbage", 8, cfg));
   TEST_ASSERT_EQUAL_UINT8(128, cfg.settings.brightness);
-  TEST_ASSERT_EQUAL_UINT16(kConsumerVolUp, cfg.fallback[kSlotEncCw].media);
+  TEST_ASSERT_EQUAL_UINT16(kConsumerVolUp, cfg.fallback[5].media);
 }
 
 void test_debouncer() {

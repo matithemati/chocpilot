@@ -1,15 +1,12 @@
 // HAL: Arduino / SparkFun Pro Micro (ATmega32U4, rdzeń Arduino AVR, PluggableUSB HID, EEPROM).
-#if defined(CHOCPILOT_BOARD_PROMICRO)
 
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <HID.h>
-#include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <string.h>
 #include <util/crc16.h>
 
-#include "../boards/board.h"
 #include "hal.h"
 
 namespace chocpilot {
@@ -52,18 +49,12 @@ uint8_t crcOf(const uint8_t* data, size_t len) {
   return crc;
 }
 
-void (*encoderIsr)() = nullptr;
-
 }  // namespace
 
 // --- board ---
 
 void usbBegin() {
   // USB CDC + HID uruchamia rdzeń Arduino (main.cpp → USBDevice.attach()).
-}
-
-void i2cBegin() {
-  // Ekran tylko przez programowe I²C (U8g2 SW_I2C) – sprzętowy TWI nie jest używany.
 }
 
 void reboot(bool bootloader) {
@@ -130,33 +121,6 @@ void hidConsumerReport(uint16_t usage) {
   HID().SendReport(kRidConsumer, &usage, sizeof(usage));  // little-endian jak w HID
 }
 
-// --- encoder ---
-
-void encoderIrqBegin(void (*isr)()) {
-  encoderIsr = isr;
-  *digitalPinToPCMSK(board::kEncA) |= _BV(digitalPinToPCMSKbit(board::kEncA));
-  *digitalPinToPCMSK(board::kEncB) |= _BV(digitalPinToPCMSKbit(board::kEncB));
-  PCIFR = _BV(PCIF0);
-  PCICR |= _BV(PCIE0);
-}
-
-// --- status_led ---
-// Diody RX/TX Pro Micro steruje rdzeń USB (miganie przy transmisji), a innej diody płytka
-// nie ma – stan pokazuje tylko ekran.
-
-void statusLedBegin() {}
-
-void statusLedSet(LedState state) { (void)state; }
-
-void statusLedPulse() {}
-
-void statusLedUpdate(uint32_t nowMs) { (void)nowMs; }
-
 }  // namespace hal
 }  // namespace chocpilot
 
-ISR(PCINT0_vect) {
-  if (chocpilot::hal::encoderIsr != nullptr) chocpilot::hal::encoderIsr();
-}
-
-#endif  // CHOCPILOT_BOARD_PROMICRO

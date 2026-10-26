@@ -1,4 +1,4 @@
-// Ekran OLED SSD1306 128×32 (U8g2). Rysuje tylko przy zmianie stanu.
+// Ekran OLED 2,42" SSD1309 128×64 (mini_gfx + U8x8). Rysuje tylko przy zmianie stanu.
 #pragma once
 
 #include <stdint.h>
@@ -10,8 +10,6 @@ namespace chocpilot {
 
 struct TestSnapshot {
   bool keys[kTotalKeys] = {false};
-  int32_t encPulses = 0;
-  int32_t encSteps = 0;
 };
 
 class Display {

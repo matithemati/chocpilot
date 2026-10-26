@@ -1,4 +1,4 @@
-// Model danych zapisywanych w pamięci urządzenia (niezależny od płytki) i jego kodek JSON.
+// Model danych zapisywanych w pamięci urządzenia i jego zapis binarny.
 #pragma once
 
 #include <stddef.h>
@@ -6,28 +6,22 @@
 
 namespace chocpilot {
 
-constexpr int kMatrixKeys = 9;
-constexpr int kEncoderKey = 10;  // przycisk enkodera
-constexpr int kTotalKeys = 10;
+// Matryca 2 × 4 (Kailh Choc): klawisze 1–4 w wierszu 0, 5–8 w wierszu 1.
+constexpr int kRows = 2;
+constexpr int kCols = 4;
+constexpr int kTotalKeys = kRows * kCols;
 
 // Limity napisów (w znakach Unicode) i rozmiary buforów (w bajtach UTF-8, z \0).
 constexpr size_t kTitleChars = 21;
-constexpr size_t kLabelChars = 7;
-#if defined(CHOCPILOT_COMPACT)
+constexpr size_t kLabelChars = 10;  // na ekranie 2 wiersze po 5 znaków w komórce 32 px
 // Mało RAM (ATmega32U4): bufory na tekst ASCII – dłuższy UTF-8 jest obcinany wcześniej.
 constexpr size_t kTitleBuf = 22;
-constexpr size_t kLabelBuf = 10;
-#else
-constexpr size_t kTitleBuf = 48;
-constexpr size_t kLabelBuf = 24;
-#endif
+constexpr size_t kLabelBuf = 12;
 
 struct Settings {
   uint8_t brightness = 128;
   uint16_t screensaverS = 300;
   bool flip = false;
-  bool encReverse = false;
-  uint8_t encPulses = 4;
   uint8_t debounceMs = 8;
   uint8_t oledAddr = 0x3C;
 };
@@ -40,10 +34,8 @@ struct FallbackBinding {
   bool empty() const { return mods == 0 && code == 0 && media == 0; }
 };
 
-// Sloty: 0..9 = klawisze 1..10, 10 = obrót CW, 11 = obrót CCW.
-constexpr int kSlotEncCw = 10;
-constexpr int kSlotEncCcw = 11;
-constexpr int kFallbackSlots = 12;
+// Sloty 0..7 = klawisze 1..8.
+constexpr int kFallbackSlots = kTotalKeys;
 
 enum class DisplayMode : uint8_t { None = 0, Profile, Grid, Text, Bar };
 
@@ -51,7 +43,7 @@ enum class DisplayMode : uint8_t { None = 0, Profile, Grid, Text, Bar };
 struct DisplayState {
   DisplayMode mode = DisplayMode::None;
   char title[kTitleBuf] = {0};  // tytuł siatki albo nazwa profilu
-  char labels[kMatrixKeys][kLabelBuf] = {{0}};
+  char labels[kTotalKeys][kLabelBuf] = {{0}};
 };
 
 struct DeviceConfig {
@@ -63,11 +55,10 @@ struct DeviceConfig {
   static void defaultFallback(FallbackBinding (&slots)[kFallbackSlots]);
 };
 
-// Format zapisu: JSON, a przy CHOCPILOT_COMPACT – binarny (wersja + struktura, bez ArduinoJson).
-// Zwraca liczbę zapisanych bajtów (0 przy braku miejsca).
+// Zapis binarny: wersja + struktura. Zwraca liczbę zapisanych bajtów (0 przy braku miejsca).
 size_t encodeConfig(const DeviceConfig& cfg, char* buf, size_t cap);
 // Zwraca false, jeśli dane są uszkodzone (wtedy cfg ma wartości domyślne).
-bool decodeConfig(const char* json, size_t len, DeviceConfig& cfg);
+bool decodeConfig(const char* data, size_t len, DeviceConfig& cfg);
 
 // Kopiuje UTF-8 obcinając do maxChars znaków i rozmiaru bufora, bez łamania sekwencji.
 void copyUtf8(char* dst, size_t dstSize, const char* src, size_t maxChars);

@@ -38,14 +38,9 @@ void Link::poll(LineHandler handler) {
 
 void Link::sendRaw(size_t len) {
   if (len == 0) return;
-#if defined(ARDUINO_ARCH_AVR)
   // Rdzeń AVR: operator bool() czeka 10 ms, a availableForWrite() podaje tylko wolne miejsce
   // w 64-bajtowym buforze końcówki USB. Bez otwartego portu (DTR) wiadomość jest pomijana.
   if (!Serial.dtr()) return;
-#else
-  // Bez blokowania: gdy host nie odbiera (brak aplikacji), wiadomość jest pomijana.
-  if (!Serial || Serial.availableForWrite() < static_cast<int>(len + 1)) return;
-#endif
   Serial.write(reinterpret_cast<const uint8_t*>(tx_), len);
   Serial.write('\n');
 }
@@ -57,8 +52,6 @@ void Link::sendHello(bool online) {
 void Link::sendKey(uint8_t key, bool down, uint32_t t) {
   sendRaw(buildKey(tx_, sizeof(tx_), key, down, t));
 }
-
-void Link::sendEnc(int32_t steps, uint32_t t) { sendRaw(buildEnc(tx_, sizeof(tx_), steps, t)); }
 
 void Link::sendAck(int32_t id) { sendRaw(buildAck(tx_, sizeof(tx_), id)); }
 

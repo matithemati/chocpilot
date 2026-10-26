@@ -18,7 +18,6 @@ class Link {
 
   void sendHello(bool online);
   void sendKey(uint8_t key, bool down, uint32_t t);
-  void sendEnc(int32_t steps, uint32_t t);
   void sendAck(int32_t id);
   void sendError(bool hasId, int32_t id, FlashText msg);
   void sendLog(FlashText level, FlashText msg);
@@ -33,11 +32,7 @@ class Link {
   char rx_[kMaxLineLength];
   size_t rxLen_ = 0;
   bool overflow_ = false;
-#if defined(CHOCPILOT_COMPACT)
   char tx_[216];  // najdłuższa wiadomość: hello z diagnostyką I²C (do 214 znaków)
-#else
-  char tx_[256];
-#endif
 };
 
 }  // namespace chocpilot

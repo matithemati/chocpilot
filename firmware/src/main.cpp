@@ -1,4 +1,4 @@
-// ChocPilot – firmware. Cienka warstwa: skan klawiszy i enkodera, ekran, kilka ustawień.
+// ChocPilot – firmware. Cienka warstwa: skan 8 klawiszy, ekran, kilka ustawień.
 // Logika akcji, gestów i profili działa w aplikacji na PC (protokół: docs/PROTOCOL.md).
 #include <Arduino.h>
 #include <string.h>
@@ -6,7 +6,6 @@
 #include "config.h"
 #include "device_config.h"
 #include "display.h"
-#include "encoder.h"
 #include "fallback.h"
 #include "hal/hal.h"
 #include "matrix.h"
@@ -22,7 +21,6 @@ namespace {
 DeviceConfig gConfig;
 ConfigStore gStore;
 Matrix gMatrix;
-Encoder gEncoder;
 Display gDisplay;
 Link gLink;
 Fallback gFallback(gConfig.fallback);
@@ -33,24 +31,17 @@ uint32_t gLastRx = 0;
 bool gEverRx = false;
 
 uint32_t gLastScanUs = 0;
-int32_t gEncPending = 0;
-uint32_t gLastEncSend = 0;
 
 bool gTestMode = false;
 TestSnapshot gTest;
-uint32_t gComboSince = 0;  // od kiedy trzymane K1+K3 (0 = nie)
+uint32_t gComboSince = 0;  // od kiedy trzymane K1+K4 (0 = nie)
 bool gComboFired = false;
 
-void applySettings() {
-  gEncoder.setPulsesPerDetent(gConfig.settings.encPulses);
-  gEncoder.setReverse(gConfig.settings.encReverse);
-  gDisplay.applySettings(gConfig.settings);
-}
+void applySettings() { gDisplay.applySettings(gConfig.settings); }
 
 void setTestMode(bool active) {
   if (gTestMode == active) return;
   gTestMode = active;
-  gTest.encSteps = 0;
   gDisplay.setTestMode(active);
   gLink.sendTest(active);
 }
@@ -65,7 +56,6 @@ void setOnline(bool online) {
 
 void onUserActivity(uint32_t now) {
   gDisplay.activity(now);
-  hal::statusLedPulse();
 }
 
 void onKeyChange(uint8_t key, bool down) {
@@ -158,25 +148,10 @@ void updateHeartbeat(uint32_t now) {
   setOnline(alive);
 }
 
-void updateEncoder(uint32_t now) {
-  const int32_t steps = gEncoder.takeSteps();
-  if (steps != 0) {
-    gEncPending += steps;
-    gTest.encSteps += steps;
-    gFallback.onEncoder(steps);
-    onUserActivity(now);
-  }
-  if (gEncPending != 0 && now - gLastEncSend >= kEncReportIntervalMs) {
-    gLink.sendEnc(gEncPending, now);
-    gEncPending = 0;
-    gLastEncSend = now;
-  }
-  gTest.encPulses = gEncoder.rawPulses();
-}
-
-// K1+K3 trzymane 3 s: zaraz po starcie włącza tryb testu, w trybie testu – wyłącza.
+// K1+K4 (skrajne klawisze górnego rzędu) trzymane 3 s: zaraz po starcie włącza tryb testu,
+// w trybie testu – wyłącza.
 void updateTestCombo(uint32_t now) {
-  const bool combo = gMatrix.pressed(1) && gMatrix.pressed(3);
+  const bool combo = gMatrix.pressed(1) && gMatrix.pressed(kCols);
   if (!combo) {
     gComboSince = 0;
     gComboFired = false;
@@ -195,21 +170,19 @@ void updateTestCombo(uint32_t now) {
 void setup() {
   hal::usbBegin();
   gLink.begin();
-  hal::statusLedBegin();
 
   const bool loaded = gStore.load(gConfig);
-  hal::i2cBegin();
   gDisplay.begin(gConfig.settings);
   gDisplay.restore(gConfig.display);
   gLink.diag = &gDisplay.diag();
 
   gMatrix.begin();
-  gEncoder.begin();
   applySettings();
   gFallback.setEnabled(true);
 
   gLink.sendHello(false);
-  gLink.sendLog(CHOCPILOT_F("info"), loaded ? CHOCPILOT_F("config loaded") : CHOCPILOT_F("default config"));
+  gLink.sendLog(CHOCPILOT_F("info"),
+                loaded ? CHOCPILOT_F("config loaded") : CHOCPILOT_F("default config"));
 }
 
 void loop() {
@@ -222,7 +195,6 @@ void loop() {
     updateTestCombo(now);
   }
 
-  updateEncoder(now);
   gLink.poll(onLine);
   updateHeartbeat(now);
   gFallback.update();
@@ -230,9 +202,7 @@ void loop() {
   gDisplay.setTestSnapshot(gTest);
   gDisplay.update(now);
 
-  hal::statusLedSet(gTestMode ? hal::LedState::Test
-                              : (gOnline ? hal::LedState::Online : hal::LedState::Offline));
-  hal::statusLedUpdate(now);
-
-  if (gStore.update(gConfig, now)) gLink.sendLog(CHOCPILOT_F("info"), CHOCPILOT_F("config saved"));
+  if (gStore.update(gConfig, now)) {
+    gLink.sendLog(CHOCPILOT_F("info"), CHOCPILOT_F("config saved"));
+  }
 }

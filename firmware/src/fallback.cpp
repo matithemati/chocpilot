@@ -6,10 +6,6 @@
 
 namespace chocpilot {
 
-namespace {
-constexpr int32_t kMaxEncoderBurst = 10;
-}
-
 void Fallback::setEnabled(bool enabled) {
   if (enabled_ == enabled) return;
   enabled_ = enabled;
@@ -90,29 +86,6 @@ void Fallback::onKey(uint8_t key, bool down) {
     heldKeyboard_ &= static_cast<uint16_t>(~bit);
     pushKeyboardState(0, 0);
   }
-}
-
-void Fallback::onEncoder(int32_t steps) {
-  if (!enabled_ || steps == 0) return;
-  const FallbackBinding& b = bindings_[steps > 0 ? kSlotEncCw : kSlotEncCcw];
-  if (b.empty()) return;
-  int32_t n = steps > 0 ? steps : -steps;
-  if (n > kMaxEncoderBurst) n = kMaxEncoderBurst;
-  // Każdy krok to para raportów (wciśnięcie + zwolnienie) – tylko tyle, ile zmieści kolejka,
-  // żeby nie zgubić zwolnienia.
-  const int32_t room = (kQueueSize - count_) / 2;
-  if (n > room) n = room;
-  if (n <= 0) return;
-  for (int32_t i = 0; i < n; ++i) {
-    if (b.media != 0) {
-      pushConsumer(b.media);
-      pushConsumer(0);
-    } else {
-      pushKeyboardState(b.mods, b.code);
-      pushKeyboardState(0, 0);
-    }
-  }
-  anySent_ = true;
 }
 
 void Fallback::update() {

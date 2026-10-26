@@ -1,4 +1,4 @@
-// Tryb awaryjny: gdy aplikacja nie odpowiada, klawisze i pokrętło wysyłają skróty HID.
+// Tryb awaryjny: gdy aplikacja nie odpowiada, klawisze wysyłają skróty HID.
 #pragma once
 
 #include <stdint.h>
@@ -16,7 +16,6 @@ class Fallback {
   bool enabled() const { return enabled_; }
 
   void onKey(uint8_t key, bool down);
-  void onEncoder(int32_t steps);
   // Wysyła zakolejkowane raporty, gdy HID jest gotowy (jeden raport na wywołanie).
   void update();
 
@@ -34,15 +33,11 @@ class Fallback {
 
   const FallbackBinding (&bindings_)[kFallbackSlots];
   bool enabled_ = true;
-  uint16_t heldKeyboard_ = 0;  // bity klawiszy 1..10 trzymanych ze skrótem klawiaturowym
+  uint16_t heldKeyboard_ = 0;  // bity klawiszy 1..8 trzymanych ze skrótem klawiaturowym
   uint16_t heldConsumerKey_ = 0;  // klawisz trzymający consumer control (0 = brak)
   bool anySent_ = false;
 
-#if defined(CHOCPILOT_COMPACT)
   static constexpr uint8_t kQueueSize = 12;
-#else
-  static constexpr uint8_t kQueueSize = 32;
-#endif
   Report queue_[kQueueSize];
   uint8_t head_ = 0;
   uint8_t count_ = 0;

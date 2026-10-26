@@ -7,13 +7,8 @@
 namespace chocpilot {
 
 namespace {
-#if defined(CHOCPILOT_COMPACT)
 // Mało RAM: bufor zapisu (ok. 170 B) tylko na stosie na czas wczytania / zapisu.
 #define CHOCPILOT_CONFIG_BUFFER char gBuffer[kConfigBufSize]
-#else
-char gBuffer[kConfigBufSize];
-#define CHOCPILOT_CONFIG_BUFFER
-#endif
 }  // namespace
 
 bool ConfigStore::load(DeviceConfig& cfg) {

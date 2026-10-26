@@ -2,54 +2,35 @@
 
 #include <Arduino.h>
 #include <string.h>
-#if defined(CHOCPILOT_COMPACT)
-#include "mini_gfx.h"
-#else
-#include <U8g2lib.h>
-#include <Wire.h>
-#endif
 
 #include "boards/board.h"
 #include "config.h"
+#include "mini_gfx.h"
 #include "time_util.h"
 
 namespace chocpilot {
 
 namespace {
 
-#if defined(CHOCPILOT_COMPACT)
-// ATmega32U4: zamiast U8g2 minimalna grafika (mini_gfx.h) z jednym krojem 5×7 – mniejsze
-// odpowiedniki czcionek poniżej. Tylko programowe I²C: sprzętowy TWI Pro Micro leży na
-// zamienionych pinach.
-static_assert(board::kOledSoftI2c, "CHOCPILOT_COMPACT obsługuje tylko programowe I2C");
-MiniGfx u8g2(board::kScl, board::kSda);
+// Minimalna grafika (mini_gfx.h): jeden krój 5×7 w kilku skalach zamiast czcionek U8g2.
+MiniGfx u8g2;
 
 const uint8_t* const kFontSmall = kMiniFont1x;
-const uint8_t* const kFontText = kMiniFont1x;
-const uint8_t* const kFontPolish = kMiniFont1x;  // polskie litery bez ogonków
 const uint8_t* const kFontMedium = kMiniFontBold;
 const uint8_t* const kFontLarge = kMiniFont2x;
-const uint8_t* const kFontHuge = kMiniFont2x;
-#else
-// Sprzętowe I²C (Wire) albo programowe – wybór stałą board::kOledSoftI2c (np. gdy na PCB
-// SDA/SCL trafiły na piny, których sprzętowy kontroler I²C nie obsługuje w tej roli).
-U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C hwOled(U8G2_R0, U8X8_PIN_NONE);
-U8G2_SSD1306_128X32_UNIVISION_F_SW_I2C swOled(U8G2_R0, board::kScl, board::kSda, U8X8_PIN_NONE);
-U8G2& u8g2 = board::kOledSoftI2c ? static_cast<U8G2&>(swOled) : static_cast<U8G2&>(hwOled);
+const uint8_t* const kFontHuge = kMiniFont3x;
 
-// Czcionki: 5x7 mieści 7 znaków w komórce 42 px (siatka 3×3 + pasek tytułu = 32 px).
-const uint8_t* const kFontSmall = u8g2_font_5x7_tf;
-const uint8_t* const kFontText = u8g2_font_6x10_tf;
-const uint8_t* const kFontPolish = u8g2_font_6x12_te;  // zawiera ą ę ł ń ś ź ż
-const uint8_t* const kFontMedium = u8g2_font_helvB10_tf;
-const uint8_t* const kFontLarge = u8g2_font_helvB14_tf;
-const uint8_t* const kFontHuge = u8g2_font_helvB18_tf;
-#endif
-
-constexpr int kWidth = 128;
-constexpr int kHeight = 32;
+constexpr int kWidth = MiniGfx::kWidth;
+constexpr int kHeight = MiniGfx::kHeight;
 constexpr uint32_t kSplashMs = 1500;
-constexpr uint32_t kTestRedrawMs = 33;
+constexpr uint32_t kTestRedrawMs = 50;
+
+// Siatka 2 × 4 pod paskiem tytułu: komórki 32 × 27 px, etykieta w 1 albo 2 wierszach po 5 znaków.
+constexpr int kTitleBarH = 10;
+constexpr int kCellW = kWidth / kCols;
+constexpr int kCellTop = kTitleBarH + 1;
+constexpr int kCellH = 27;
+constexpr uint8_t kCellLineChars = 5;
 
 // Rysuje napis wyśrodkowany w poziomie, wybierając największą czcionkę, która się mieści.
 void drawCenteredFit(const char* text, int baseline, const uint8_t* const* fonts, int count) {
@@ -63,17 +44,35 @@ void drawCenteredFit(const char* text, int baseline, const uint8_t* const* fonts
   }
 }
 
-void drawCentered(const char* text, int cx, int baseline) {
-  const int w = u8g2.getUTF8Width(text);
-  u8g2.drawUTF8(cx - w / 2, baseline, text);
+void drawCentered(const char* text, int cx, int baseline, uint8_t maxChars = 0xFF) {
+  const int w = u8g2.getUTF8Width(text, maxChars);
+  u8g2.drawUTF8(cx - w / 2, baseline, text, maxChars);
 }
 
-// --- programowe sprawdzenie adresu I²C (linie open-drain emulowane przez INPUT_PULLUP)
-constexpr uint32_t kSoftHalfUs = 5;  // ok. 100 kHz
+// Etykieta klawisza w komórce siatki: do 5 znaków w jednym wierszu, dłuższa w dwóch
+// (podział na spacji, jeśli wypada w pierwszych 5 znakach).
+void drawCellLabel(const char* label, int cx, int top) {
+  if (MiniGfx::charCount(label) <= kCellLineChars) {
+    drawCentered(label, cx, top + 17);
+    return;
+  }
+  uint8_t first = kCellLineChars;
+  const char* rest = MiniGfx::skipChars(label, kCellLineChars);
+  for (uint8_t i = kCellLineChars; i > 0; --i) {
+    const char* p = MiniGfx::skipChars(label, i);
+    if (*p == ' ') {
+      first = i;
+      rest = p + 1;
+      break;
+    }
+  }
+  drawCentered(label, cx, top + 12, first);
+  drawCentered(rest, cx, top + 22, kCellLineChars);
+}
 
-// Piny programowego I²C (mogą zostać zamienione, jeśli ekran odpowiada odwrotnie).
-uint8_t gSda = board::kSda;
-uint8_t gScl = board::kScl;
+// --- programowe sprawdzenie adresu I²C (linie open-drain emulowane przez INPUT_PULLUP);
+// używane tylko, gdy sprzętowy TWI nic nie znajdzie – do wykrycia zamienionych SDA/SCL.
+constexpr uint32_t kSoftHalfUs = 5;  // ok. 100 kHz
 
 void lineLow(uint8_t pin) {
   digitalWrite(pin, LOW);
@@ -82,55 +81,59 @@ void lineLow(uint8_t pin) {
 
 void lineRelease(uint8_t pin) { pinMode(pin, INPUT_PULLUP); }
 
-bool softProbe(uint8_t addr) {
-  lineRelease(gSda);
-  lineRelease(gScl);
+bool softProbe(uint8_t sda, uint8_t scl, uint8_t addr) {
+  lineRelease(sda);
+  lineRelease(scl);
   delayMicroseconds(kSoftHalfUs);
-  if (digitalRead(gSda) == LOW || digitalRead(gScl) == LOW) return false;  // zwarcie
+  if (digitalRead(sda) == LOW || digitalRead(scl) == LOW) return false;  // zwarcie
   // START
-  lineLow(gSda);
+  lineLow(sda);
   delayMicroseconds(kSoftHalfUs);
-  lineLow(gScl);
+  lineLow(scl);
   delayMicroseconds(kSoftHalfUs);
   // adres + bit zapisu
   const uint8_t byte = static_cast<uint8_t>(addr << 1);
   for (int8_t bit = 7; bit >= 0; --bit) {
     if (byte & (1 << bit)) {
-      lineRelease(gSda);
+      lineRelease(sda);
     } else {
-      lineLow(gSda);
+      lineLow(sda);
     }
     delayMicroseconds(kSoftHalfUs);
-    lineRelease(gScl);
+    lineRelease(scl);
     delayMicroseconds(kSoftHalfUs);
-    lineLow(gScl);
+    lineLow(scl);
   }
   // ACK od urządzenia
-  lineRelease(gSda);
+  lineRelease(sda);
   delayMicroseconds(kSoftHalfUs);
-  lineRelease(gScl);
+  lineRelease(scl);
   delayMicroseconds(kSoftHalfUs);
-  const bool ack = digitalRead(gSda) == LOW;
-  lineLow(gScl);
+  const bool ack = digitalRead(sda) == LOW;
+  lineLow(scl);
   delayMicroseconds(kSoftHalfUs);
   // STOP
-  lineLow(gSda);
+  lineLow(sda);
   delayMicroseconds(kSoftHalfUs);
-  lineRelease(gScl);
+  lineRelease(scl);
   delayMicroseconds(kSoftHalfUs);
-  lineRelease(gSda);
+  lineRelease(sda);
   delayMicroseconds(kSoftHalfUs);
   return ack;
 }
 
-bool probe(uint8_t addr) {
-#if defined(CHOCPILOT_COMPACT)
-  return softProbe(addr);
-#else
-  if (board::kOledSoftI2c) return softProbe(addr);
-  Wire.beginTransmission(addr);
-  return Wire.endTransmission() == 0;
-#endif
+// swapped = false → sprzętowy TWI na pinach płytki, true → programowo na zamienionych liniach.
+bool probe(uint8_t addr, bool swapped) {
+  return swapped ? softProbe(board::kScl, board::kSda, addr) : MiniGfx::twiProbe(addr);
+}
+
+void scanBus(I2cDiag& diag, bool swapped) {
+  diag.count = 0;
+  for (uint8_t addr = 0x08; addr <= 0x77; ++addr) {
+    if (probe(addr, swapped) && diag.count < sizeof(diag.devices)) {
+      diag.devices[diag.count++] = addr;
+    }
+  }
 }
 
 // Dopisuje liczbę dziesiętną na końcu napisu (zamiast snprintf – na AVR to ok. 1,5 KB flash).
@@ -154,48 +157,35 @@ void appendText(char* dst, size_t cap, const char* text) {
   dst[len] = '\0';
 }
 
-void scanBus(I2cDiag& diag) {
-  diag.count = 0;
-  for (uint8_t addr = 0x08; addr <= 0x77; ++addr) {
-    if (probe(addr) && diag.count < sizeof(diag.devices)) diag.devices[diag.count++] = addr;
-  }
-}
-
 }  // namespace
 
 bool Display::begin(const Settings& settings) {
-  // Skan magistrali: diagnostyka i automatyczny wybór adresu (0x3C / 0x3D).
+  // Stan linii bez wewnętrznego pull-upu: wysoki tylko, gdy moduł jest zasilony i ma rezystory.
   diag_ = I2cDiag();
-  if (board::kOledSoftI2c) {
-    // Stan linii bez wewnętrznego pull-upu: wysoki tylko, gdy moduł jest zasilony i ma rezystory.
-    pinMode(board::kSda, INPUT);
-    pinMode(board::kScl, INPUT);
-    delay(2);
-    diag_.sdaLevel = digitalRead(board::kSda) == HIGH ? 1 : 0;
-    diag_.sclLevel = digitalRead(board::kScl) == HIGH ? 1 : 0;
-  }
-  scanBus(diag_);
-  if (board::kOledSoftI2c && diag_.count == 0) {
-    // Nic nie odpowiada – może SDA i SCL są zamienione na płytce lub module.
-    gSda = board::kScl;
-    gScl = board::kSda;
-    scanBus(diag_);
-    if (diag_.count > 0) {
-      diag_.swapped = true;
-    } else {
-      gSda = board::kSda;
-      gScl = board::kScl;
-    }
-  }
-  if (board::kOledSoftI2c) {
-    u8x8_SetPin(u8g2.getU8x8(), U8X8_PIN_I2C_DATA, gSda);
-    u8x8_SetPin(u8g2.getU8x8(), U8X8_PIN_I2C_CLOCK, gScl);
+  pinMode(board::kSda, INPUT);
+  pinMode(board::kScl, INPUT);
+  delay(2);
+  diag_.sdaLevel = digitalRead(board::kSda) == HIGH ? 1 : 0;
+  diag_.sclLevel = digitalRead(board::kScl) == HIGH ? 1 : 0;
+
+  // Skan magistrali: diagnostyka i automatyczny wybór adresu (0x3C / 0x3D).
+  MiniGfx::twiBegin(board::kSda, board::kScl);
+  bool swapped = false;
+  scanBus(diag_, false);
+  if (diag_.count == 0) {
+    // Nic nie odpowiada – może SDA i SCL są zamienione na płytce lub module (moduły 2,42"
+    // często mają kolejność GND, VCC, SCL, SDA). TWI ma piny na stałe, więc programowo.
+    MiniGfx::twiEnd();
+    scanBus(diag_, true);
+    swapped = diag_.count > 0;
+    diag_.swapped = swapped;
+    if (!swapped) MiniGfx::twiBegin(board::kSda, board::kScl);
   }
   uint8_t addr = settings.oledAddr;
-  if (!probe(addr)) {
-    if (probe(0x3C)) {
+  if (!probe(addr, swapped)) {
+    if (probe(0x3C, swapped)) {
       addr = 0x3C;
-    } else if (probe(0x3D)) {
+    } else if (probe(0x3D, swapped)) {
       addr = 0x3D;
     } else {
       addr = 0;
@@ -203,9 +193,8 @@ bool Display::begin(const Settings& settings) {
   }
   diag_.oledAddr = addr;
 
-  u8g2.setI2CAddress(static_cast<uint8_t>((addr != 0 ? addr : settings.oledAddr) << 1));
-  ready_ = u8g2.begin();
-  u8g2.enableUTF8Print();
+  const uint8_t useAddr = addr != 0 ? addr : settings.oledAddr;
+  ready_ = swapped ? u8g2.begin(useAddr, board::kScl, board::kSda) : u8g2.begin(useAddr);
   applySettings(settings);
   splashUntil_ = millis() + kSplashMs;
   lastActivity_ = millis();
@@ -217,11 +206,7 @@ void Display::applySettings(const Settings& settings) {
   screensaverS_ = settings.screensaverS;
   if (!ready_) return;
   u8g2.setContrast(settings.brightness);
-#if defined(CHOCPILOT_COMPACT)
   u8g2.setFlip(settings.flip);
-#else
-  u8g2.setDisplayRotation(settings.flip ? U8G2_R2 : U8G2_R0);
-#endif
   dirty_ = true;
 }
 
@@ -240,7 +225,8 @@ void Display::restore(const DisplayState& state) {
 }
 
 void Display::apply(const DisplayCommand& cmd, uint32_t nowMs) {
-  const bool transient = (cmd.mode == DisplayMode::Text || cmd.mode == DisplayMode::Bar) && cmd.ms > 0;
+  const bool transient =
+      (cmd.mode == DisplayMode::Text || cmd.mode == DisplayMode::Bar) && cmd.ms > 0;
   if (transient) {
     overlay_ = cmd;
     overlayUntil_ = nowMs + cmd.ms;
@@ -316,17 +302,11 @@ void Display::update(uint32_t nowMs) {
 
 void Display::draw(uint32_t nowMs) {
   (void)nowMs;
-  // firstPage/nextPage: z pełnym buforem U8g2 jeden przebieg, w CHOCPILOT_COMPACT ta sama
-  // zawartość rysowana kolejno dla każdego z 4 pasów ekranu (bufor pasa na stosie).
-#if defined(CHOCPILOT_COMPACT)
+  // Ta sama zawartość rysowana kolejno dla każdego z 8 pasów ekranu (bufor pasa na stosie).
   uint8_t page[MiniGfx::kWidth];
   u8g2.firstPage(page);
-#else
-  u8g2.firstPage();
-#endif
   do {
     u8g2.setDrawColor(1);
-    u8g2.setFontMode(1);
     if (splashUntil_ != 0) {
       drawSplash();
     } else if (testMode_) {
@@ -354,28 +334,28 @@ void Display::drawStatusMarker(int x, int y, bool inverted) {
 }
 
 void Display::drawSplash() {
-  u8g2.setFont(kFontHuge);
-  drawCentered("ChocPilot", kWidth / 2, 20);
+  u8g2.setFont(kFontLarge);
+  drawCentered("ChocPilot", kWidth / 2, 30);
   u8g2.setFont(kFontSmall);
   char line[40] = "fw ";
   appendText(line, sizeof(line), CHOCPILOT_FW_VERSION);
   appendText(line, sizeof(line), "  ");
   appendText(line, sizeof(line), board::kBoardName);
-  drawCentered(line, kWidth / 2, 31);
+  drawCentered(line, kWidth / 2, 50);
 }
 
 void Display::drawOffline() {
-  u8g2.setFont(kFontMedium);
-  drawCentered("Offline", kWidth / 2, 13);
-  u8g2.setFont(kFontPolish);
-  drawCentered("Czekam na aplikację", kWidth / 2, 28);
+  u8g2.setFont(kFontLarge);
+  drawCentered("Offline", kWidth / 2, 28);
+  u8g2.setFont(kFontSmall);
+  drawCentered("Czekam na aplikację", kWidth / 2, 48);
   drawStatusMarker(kWidth - 4, 3, false);
 }
 
 void Display::drawBase() {
   if (base_.mode == DisplayMode::None) {
     u8g2.setFont(kFontLarge);
-    drawCentered("ChocPilot", kWidth / 2, 22);
+    drawCentered("ChocPilot", kWidth / 2, 38);
     drawStatusMarker(kWidth - 4, 3, false);
     return;
   }
@@ -385,51 +365,51 @@ void Display::drawBase() {
 void Display::drawCommand(const DisplayCommand& cmd) {
   switch (cmd.mode) {
     case DisplayMode::Profile: {
-      static const uint8_t* const fonts[] = {kFontLarge, kFontMedium, kFontText, kFontSmall};
-      drawCenteredFit(cmd.title, 23, fonts, 4);
+      static const uint8_t* const fonts[] = {kFontHuge, kFontLarge, kFontMedium, kFontSmall};
+      drawCenteredFit(cmd.title, 40, fonts, 4);
       drawStatusMarker(kWidth - 4, 3, false);
       break;
     }
     case DisplayMode::Grid: {
-      // Pasek tytułu (odwrócony) + 3 wiersze etykiet po 8 px.
-      u8g2.drawBox(0, 0, kWidth, 8);
+      // Pasek tytułu (odwrócony) + siatka 2 × 4 ułożona jak klawisze.
+      u8g2.drawBox(0, 0, kWidth, kTitleBarH);
       u8g2.setFont(kFontSmall);
       u8g2.setDrawColor(0);
-      u8g2.drawUTF8(2, 7, cmd.title);
+      u8g2.drawUTF8(2, 8, cmd.title);
       u8g2.setDrawColor(1);
-      drawStatusMarker(kWidth - 4, 3, true);
-      for (int r = 0; r < 3; ++r) {
-        for (int c = 0; c < 3; ++c) {
-          const int cx = c * 43 + 21;
-          drawCentered(cmd.labels[r * 3 + c], cx, 15 + r * 8);
+      drawStatusMarker(kWidth - 5, 4, true);
+      for (int r = 0; r < kRows; ++r) {
+        for (int c = 0; c < kCols; ++c) {
+          drawCellLabel(cmd.labels[r * kCols + c], c * kCellW + kCellW / 2 - 1,
+                        kCellTop + r * kCellH);
         }
       }
-      u8g2.drawVLine(42, 9, 23);
-      u8g2.drawVLine(85, 9, 23);
+      for (int c = 1; c < kCols; ++c) u8g2.drawVLine(c * kCellW - 1, kCellTop, kHeight - kCellTop);
+      u8g2.drawHLine(0, kCellTop + kCellH - 1, kWidth);
       break;
     }
     case DisplayMode::Text: {
-      static const uint8_t* const fonts1[] = {kFontMedium, kFontText};
-      static const uint8_t* const fonts2[] = {kFontText, kFontSmall};
       if (cmd.line2[0] == '\0') {
-        static const uint8_t* const big[] = {kFontLarge, kFontMedium, kFontText};
-        drawCenteredFit(cmd.line1, 23, big, 3);
+        static const uint8_t* const big[] = {kFontHuge, kFontLarge, kFontMedium, kFontSmall};
+        drawCenteredFit(cmd.line1, 40, big, 4);
       } else {
-        drawCenteredFit(cmd.line1, 13, fonts1, 2);
-        drawCenteredFit(cmd.line2, 29, fonts2, 2);
+        static const uint8_t* const fonts1[] = {kFontLarge, kFontMedium, kFontSmall};
+        static const uint8_t* const fonts2[] = {kFontMedium, kFontSmall};
+        drawCenteredFit(cmd.line1, 26, fonts1, 3);
+        drawCenteredFit(cmd.line2, 50, fonts2, 2);
       }
       break;
     }
     case DisplayMode::Bar: {
-      u8g2.setFont(kFontText);
-      u8g2.drawUTF8(0, 10, cmd.title);
+      u8g2.setFont(kFontMedium);
+      u8g2.drawUTF8(0, 14, cmd.title);
       char pct[8] = "";
       appendNumber(pct, sizeof(pct), cmd.value);
       appendText(pct, sizeof(pct), "%");
-      u8g2.drawUTF8(kWidth - u8g2.getUTF8Width(pct), 10, pct);
-      u8g2.drawFrame(0, 16, kWidth, 14);
+      u8g2.drawUTF8(kWidth - u8g2.getUTF8Width(pct), 14, pct);
+      u8g2.drawFrame(0, 26, kWidth, 24);
       const int fill = (kWidth - 4) * cmd.value / 100;
-      if (fill > 0) u8g2.drawBox(2, 18, fill, 10);
+      if (fill > 0) u8g2.drawBox(2, 28, fill, 20);
       break;
     }
     case DisplayMode::None:
@@ -438,42 +418,40 @@ void Display::drawCommand(const DisplayCommand& cmd) {
 }
 
 void Display::drawFlash() {
-  static const uint8_t* const fonts[] = {kFontHuge, kFontLarge, kFontMedium, kFontText};
-  drawCenteredFit(flash_.text, 24, fonts, 4);
+  static const uint8_t* const fonts[] = {kFontHuge, kFontLarge, kFontMedium, kFontSmall};
+  drawCenteredFit(flash_.text, 42, fonts, 4);
   if (flash_.key != 0) {
     char tag[6] = "K";
     appendNumber(tag, sizeof(tag), flash_.key);
     u8g2.setFont(kFontSmall);
-    u8g2.drawUTF8(0, 7, tag);
+    u8g2.drawUTF8(0, 8, tag);
   }
 }
 
 void Display::drawTest() {
-  // Lewa część: siatka 3×3 (kwadraty 9 px), obok przycisk enkodera; prawa: liczniki.
-  for (int r = 0; r < 3; ++r) {
-    for (int c = 0; c < 3; ++c) {
-      const int x = 1 + c * 11;
-      const int y = 1 + r * 10;
-      if (test_.keys[r * 3 + c]) {
-        u8g2.drawBox(x, y, 9, 9);
+  // Test sprzętu: 8 pól ułożonych jak klawisze, wciśnięty = wypełniony.
+  u8g2.setFont(kFontSmall);
+  u8g2.drawUTF8(0, 8, "TEST");
+  u8g2.drawUTF8(kWidth - u8g2.getUTF8Width("K1+K4 3s: koniec"), 8, "K1+K4 3s: koniec");
+  for (int r = 0; r < kRows; ++r) {
+    for (int c = 0; c < kCols; ++c) {
+      const int key = r * kCols + c;
+      const int x = c * kCellW + 1;
+      const int y = kCellTop + 1 + r * kCellH;
+      const int w = kCellW - 3;
+      const int h = kCellH - 4;
+      char number[4] = "";
+      appendNumber(number, sizeof(number), key + 1);
+      if (test_.keys[key]) {
+        u8g2.drawBox(x, y, w, h);
+        u8g2.setDrawColor(0);
       } else {
-        u8g2.drawFrame(x, y, 9, 9);
+        u8g2.drawFrame(x, y, w, h);
       }
+      drawCentered(number, x + w / 2, y + 15);
+      u8g2.setDrawColor(1);
     }
   }
-  if (test_.keys[kEncoderKey - 1]) {
-    u8g2.drawDisc(43, 15, 6);
-  } else {
-    u8g2.drawCircle(43, 15, 6);
-  }
-  u8g2.setFont(kFontSmall);
-  char line[24] = "imp ";
-  u8g2.drawUTF8(56, 7, "TEST");
-  appendNumber(line, sizeof(line), test_.encPulses);
-  u8g2.drawUTF8(56, 18, line);
-  strcpy(line, "zab ");
-  appendNumber(line, sizeof(line), test_.encSteps);
-  u8g2.drawUTF8(56, 28, line);
 }
 
 }  // namespace chocpilot

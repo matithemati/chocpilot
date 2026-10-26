@@ -1,4 +1,4 @@
-// Skan matrycy 3×3 (COL2ROW) i przycisku enkodera (klawisz 10) z debounce per klawisz.
+// Skan matrycy 2 × 4 (COL2ROW, przełączniki Kailh Choc z diodami) z debounce per klawisz.
 #pragma once
 
 #include <stdint.h>
@@ -15,7 +15,7 @@ class Matrix {
   void begin();
   // Pełny skan (wywoływany co ~1 ms). Zmiany po debounce trafiają do callbacku.
   void scan(uint32_t nowMs, uint8_t debounceMs, KeyCallback onChange);
-  // key: 1..10
+  // key: 1..8
   bool pressed(uint8_t key) const;
 
  private:
