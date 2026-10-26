@@ -24,7 +24,7 @@ from .config import Config, ConfigStore, Profile
 from .fallback import compute_fallback
 from .gestures import KEY_GESTURES, Gesture, GestureConfig, GestureEngine, GestureEvent
 from .profiles import ForegroundWatcher, ProfileManager
-from .protocol import DeviceInfo, EncoderEvent, ErrorEvent, KeyEvent, LogEvent, TestModeEvent
+from .protocol import DeviceInfo, ErrorEvent, KeyEvent, LogEvent, TestModeEvent
 from .transport import ConnectionState, Transport
 
 log = logging.getLogger("chocpilot.engine")
@@ -40,8 +40,8 @@ class ControllerListener:
     ) -> None:
         pass
 
-    def raw_input(self, key: int | None, down: bool, steps: int) -> None:
-        """key=None → obrót pokrętła o `steps`; inaczej klawisz 1–10 down/up."""
+    def raw_input(self, key: int, down: bool) -> None:
+        """Fizyczne naciśnięcie / puszczenie klawisza 1–8."""
 
     def gesture(self, event: GestureEvent, action: ActionBase | None) -> None:
         pass
@@ -188,11 +188,8 @@ class Controller:
             return
         now = self._now_ms()
         if isinstance(event, KeyEvent):
-            self._notify(lambda li: li.raw_input(event.key, event.down, 0))
+            self._notify(lambda li: li.raw_input(event.key, event.down))
             self._on_key(event.key, event.down, now)
-        elif isinstance(event, EncoderEvent):
-            self._notify(lambda li: li.raw_input(None, True, event.steps))
-            self.gestures.rotate(event.steps, now)
         elif isinstance(event, DeviceInfo):
             # hello po restarcie urządzenia – wyślij stan ponownie
             if self.device_info is not None:
@@ -238,14 +235,10 @@ class Controller:
 
     def _gesture_config(self) -> GestureConfig:
         g = self.config.settings.gestures
-        e = self.config.settings.encoder
         return GestureConfig(
             hold_ms=g.hold_ms,
             double_tap_ms=g.double_tap_ms,
             hold_on_threshold=g.hold_on_threshold,
-            accel_enabled=e.accel_enabled,
-            accel_window_ms=e.accel_window_ms,
-            accel_multiplier=e.accel_multiplier,
         )
 
     def _has_gesture(self, key: int, gesture: Gesture) -> bool:
@@ -328,8 +321,6 @@ class Controller:
                 brightness=d.brightness,
                 screensaver_s=d.screensaver_s,
                 flip=d.flip,
-                enc_reverse=d.enc_reverse,
-                enc_pulses=d.enc_pulses,
                 debounce_ms=d.debounce_ms,
             ),
             with_id=True,
@@ -410,8 +401,8 @@ def _report_display(info: DeviceInfo) -> None:
     if info.oled_addr is None:
         log.warning(
             "Ekran OLED nie odpowiada na I²C (znalezione urządzenia: %s). Sprawdź zasilanie "
-            "3,3 V, GND oraz czy SDA i SCL nie są zamienione (KB2040: SDA=D3, SCL=D2; "
-            "Pro Micro: SDA=3, SCL=2; XIAO: SDA=D4, SCL=D5).",
+            "+5 V, GND, czy SDA trafia na pin 2, a SCL na pin 3 Pro Micro, oraz czy moduł "
+            '2,42" jest przełączony na I²C (zworki/rezystory na odwrocie).',
             found,
         )
     else:
@@ -435,11 +426,7 @@ def _report_display(info: DeviceInfo) -> None:
         )
 
 
-def _key_name(key: int | None) -> str:
-    if key is None:
-        return "Pokrętło"
-    if key == protocol.ENCODER_KEY:
-        return "Przycisk pokrętła"
+def _key_name(key: int) -> str:
     return f"K{key}"
 
 

@@ -41,10 +41,6 @@ LIGHT = {
     "info_border": "#D3E0FB",
     "info_text": "#1E3A8A",
     "switch_off": "#D4D4DA",
-    "knob_ring": "#EDEDF0",
-    "knob_tick": "#B9B9C0",
-    "knob_face": "#FFFFFF",
-    "knob_inner": "#F7F7F9",
 }
 
 DARK = {
@@ -76,10 +72,6 @@ DARK = {
     "info_border": "#24365E",
     "info_text": "#A9C2FF",
     "switch_off": "#3A3A41",
-    "knob_ring": "#26262B",
-    "knob_tick": "#4A4A52",
-    "knob_face": "#202024",
-    "knob_inner": "#1B1B1F",
 }
 
 # Czcionki: listy zastępcze dla Windows i macOS.

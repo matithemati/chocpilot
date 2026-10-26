@@ -13,7 +13,7 @@ constexpr int kTotalKeys = kRows * kCols;
 
 // Limity napisów (w znakach Unicode) i rozmiary buforów (w bajtach UTF-8, z \0).
 constexpr size_t kTitleChars = 21;
-constexpr size_t kLabelChars = 10;  // na ekranie 2 wiersze po 5 znaków w komórce 32 px
+constexpr size_t kLabelChars = 10;  // na ekranie 1–2 wiersze po 6 znaków w komórce 32 px
 // Mało RAM (ATmega32U4): bufory na tekst ASCII – dłuższy UTF-8 jest obcinany wcześniej.
 constexpr size_t kTitleBuf = 22;
 constexpr size_t kLabelBuf = 12;

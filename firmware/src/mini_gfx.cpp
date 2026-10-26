@@ -7,10 +7,11 @@
 
 namespace chocpilot {
 
-const uint8_t kMiniFont1x[] CHOCPILOT_PROGMEM = {1, 1, 0};
-const uint8_t kMiniFontBold[] CHOCPILOT_PROGMEM = {1, 1, 1};
-const uint8_t kMiniFont2x[] CHOCPILOT_PROGMEM = {2, 2, 0};
-const uint8_t kMiniFont3x[] CHOCPILOT_PROGMEM = {3, 3, 0};
+const uint8_t kMiniFont1x[] CHOCPILOT_PROGMEM = {1, 1, 0, 1};
+const uint8_t kMiniFontCondensed[] CHOCPILOT_PROGMEM = {1, 1, 0, 0};
+const uint8_t kMiniFontBold[] CHOCPILOT_PROGMEM = {1, 1, 1, 1};
+const uint8_t kMiniFont2x[] CHOCPILOT_PROGMEM = {2, 2, 0, 1};
+const uint8_t kMiniFont3x[] CHOCPILOT_PROGMEM = {3, 3, 0, 1};
 
 namespace {
 
@@ -265,7 +266,7 @@ bool MiniGfx::nextPage() {
 }
 
 int MiniGfx::advance() const {
-  return (kGlyphW + 1) * pgmByte(font_) + pgmByte(font_ + 2);
+  return (kGlyphW + pgmByte(font_ + 3)) * pgmByte(font_) + pgmByte(font_ + 2);
 }
 
 uint8_t MiniGfx::charCount(const char* text) {
@@ -282,7 +283,7 @@ const char* MiniGfx::skipChars(const char* text, uint8_t n) {
 int MiniGfx::getUTF8Width(const char* text, uint8_t maxChars) const {
   uint8_t n = 0;
   while (n < maxChars && nextChar(text) != 0) ++n;
-  return n == 0 ? 0 : n * advance() - pgmByte(font_);
+  return n == 0 ? 0 : n * advance() - pgmByte(font_ + 3) * pgmByte(font_);
 }
 
 void MiniGfx::drawUTF8(int x, int y, const char* text, uint8_t maxChars) {

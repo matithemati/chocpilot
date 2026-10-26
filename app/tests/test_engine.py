@@ -22,7 +22,7 @@ def make_controller(
     controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
     transport.connect()
     controller.handle_state(
-        ConnectionState.CONNECTED, DeviceInfo("chocpilot", "1.0.0", "kb2040"), "COM7"
+        ConnectionState.CONNECTED, DeviceInfo("chocpilot", "1.0.0", "promicro"), "COM7"
     )
     return controller, transport
 
@@ -52,7 +52,7 @@ def test_connect_pro_micro_splits_fallback(platform, clock, sync_executor) -> No
     config = Config(profiles=default_profiles())
     config.ensure_valid()
     config.settings.fallback.custom = [
-        FallbackEntry(slot=str(i), mods=["ctrl", "shift", "alt"], code="f12") for i in range(1, 11)
+        FallbackEntry(slot=str(i), mods=["ctrl", "shift", "alt"], code="f12") for i in range(1, 9)
     ]
     transport = FakeTransport()
     controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
@@ -71,9 +71,9 @@ def test_connect_pro_micro_splits_fallback(platform, clock, sync_executor) -> No
 def test_tap_executes_and_flashes(platform, clock, sync_executor) -> None:
     controller, transport = make_controller(platform, clock, sync_executor)
     transport.sent.clear()
-    tap(controller, clock, 5)
+    tap(controller, clock, 3)
     assert platform.calls == [("hotkey", ("ctrl", "c"))]
-    assert transport.of_type("flash") == [{"type": "flash", "text": "Kopiuj", "ms": 800, "key": 5}]
+    assert transport.of_type("flash") == [{"type": "flash", "text": "Kopiuj", "ms": 800, "key": 3}]
 
 
 def test_paused_skips_actions(platform, clock, sync_executor) -> None:
@@ -83,29 +83,10 @@ def test_paused_skips_actions(platform, clock, sync_executor) -> None:
     assert platform.calls == []
 
 
-def test_encoder_volume_shows_bar(platform, clock, sync_executor) -> None:
-    controller, transport = make_controller(platform, clock, sync_executor)
-    transport.sent.clear()
-    controller.handle_message({"type": "enc", "steps": 3, "t": 0})
-    assert platform.calls == [("volume", 6)]
-    bars = transport.of_type("display")
-    assert bars[0]["mode"] == "bar" and bars[0]["value"] == 56
-    assert transport.of_type("flash") == []  # pokrętło nie wyświetla flash
-
-
-def test_press_rotate_changes_track(platform, clock, sync_executor) -> None:
-    controller, _ = make_controller(platform, clock, sync_executor)
-    key(controller, clock, 10, True)
-    controller.handle_message({"type": "enc", "steps": -1, "t": 0})
-    clock.advance(1)
-    key(controller, clock, 10, False)
-    assert platform.calls == [("media", "prev")]  # bez wyciszenia po puszczeniu
-
-
 def test_profile_switch_sends_display_and_fallback(platform, clock, sync_executor) -> None:
     controller, transport = make_controller(platform, clock, sync_executor)
     transport.sent.clear()
-    tap(controller, clock, 9)  # następny profil
+    tap(controller, clock, 8, hold_s=0.6)  # przytrzymanie K8: następny profil
     assert controller.profiles.active.name == "Stream"
     kinds = [m["type"] for m in transport.sent]
     assert kinds == ["display", "flash", "set_fallback"]
@@ -130,15 +111,15 @@ def test_layer_key(platform, clock, sync_executor) -> None:
 def test_double_tap_through_tick(platform, clock, sync_executor) -> None:
     controller, _ = make_controller(platform, clock, sync_executor)
     profile = controller.profiles.active
-    profile.keys[5].double_tap = make_action("hotkey", keys="ctrl+x")
-    tap(controller, clock, 5)
+    profile.keys[3].double_tap = make_action("hotkey", keys="ctrl+x")
+    tap(controller, clock, 3)
     assert platform.calls == []
     clock.advance(0.5)
     controller.tick()
     assert platform.calls == [("hotkey", ("ctrl", "c"))]
-    tap(controller, clock, 5)
+    tap(controller, clock, 3)
     clock.advance(0.1)
-    tap(controller, clock, 5)
+    tap(controller, clock, 3)
     assert platform.calls[-1] == ("hotkey", ("ctrl", "x"))
 
 
@@ -166,16 +147,16 @@ def test_listener_receives_events(platform, clock, sync_executor) -> None:
     seen: list[tuple] = []
 
     class Spy(ControllerListener):
-        def raw_input(self, key, down, steps):
-            seen.append(("raw", key, down, steps))
+        def raw_input(self, key, down):
+            seen.append(("raw", key, down))
 
         def action_finished(self, summary, error):
             seen.append(("done", summary, error))
 
     controller.add_listener(Spy())
     tap(controller, clock, 1)
-    assert seen[0] == ("raw", 1, True, 0)
-    assert seen[1] == ("raw", 1, False, 0)
+    assert seen[0] == ("raw", 1, True)
+    assert seen[1] == ("raw", 1, False)
     assert seen[2] == ("done", "Uruchom calc.exe", None)
 
 
@@ -191,10 +172,10 @@ def test_compute_fallback_from_profile() -> None:
     config.ensure_valid()
     profile = config.profiles[0]
     bindings = {str(b.slot): b for b in compute_fallback(profile, config.settings.fallback)}
-    assert bindings["5"].mods == ("ctrl",) and bindings["5"].code == "c"
+    assert bindings["3"].mods == ("ctrl",) and bindings["3"].code == "c"
+    assert bindings["5"].media == "vol_down"
     assert bindings["7"].media == "play_pause"
-    assert bindings["enc_cw"].media == "vol_up"
-    assert bindings["10"].media == "mute"
+    assert bindings["8"].media == "mute"
     assert "1" not in bindings  # uruchamianie programu nie ma odpowiednika HID
 
     config.settings.fallback.custom = [FallbackEntry(slot="1", mods=["win"], code="e")]
@@ -203,7 +184,7 @@ def test_compute_fallback_from_profile() -> None:
 
     config.settings.fallback.from_profile = False
     bindings = {str(b.slot): b for b in compute_fallback(profile, config.settings.fallback)}
-    assert set(bindings) == {"1", "10", "enc_cw", "enc_ccw"}
+    assert set(bindings) == {"1", "5", "6", "7", "8"}
 
 
 def test_missing_display_is_logged(platform, clock, sync_executor, caplog) -> None:
@@ -212,7 +193,7 @@ def test_missing_display_is_logged(platform, clock, sync_executor, caplog) -> No
     transport = FakeTransport()
     controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
     transport.connect()
-    info = DeviceInfo("chocpilot", "1.0.1", "kb2040", has_diag=True, oled_addr=None)
+    info = DeviceInfo("chocpilot", "1.0.1", "promicro", has_diag=True, oled_addr=None)
     controller.handle_state(ConnectionState.CONNECTED, info, "COM7")
     assert "Ekran OLED nie odpowiada" in caplog.text
 
@@ -224,7 +205,7 @@ def test_low_line_is_explained(platform, clock, sync_executor, caplog) -> None:
     controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
     transport.connect()
     info = DeviceInfo(
-        "chocpilot", "1.0.3", "kb2040", has_diag=True, oled_addr=None, sda_level=0, scl_level=1
+        "chocpilot", "1.0.3", "promicro", has_diag=True, oled_addr=None, sda_level=0, scl_level=1
     )
     controller.handle_state(ConnectionState.CONNECTED, info, "COM3")
     assert "Linia SDA ma stan niski" in caplog.text

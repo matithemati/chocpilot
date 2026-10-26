@@ -6,8 +6,9 @@
 // I²C: sprzętowy TWI (własna obsługa rejestrów, bez biblioteki Wire i jej buforów w RAM). Gdy
 // ekran odpowiada dopiero po zamianie linii – programowe I²C U8x8 na zamienionych pinach.
 //
-// Jeden krój 5×7 (ASCII) w pamięci programu; „czcionki” to sposoby jego rysowania: skala 1×–3×
-// i pogrubienie. Polskie litery są zamieniane na łacińskie odpowiedniki (ą → a, Ł → L, ...).
+// Jeden krój 5×7 (ASCII) w pamięci programu; „czcionki” to sposoby jego rysowania: skala 1×–3×,
+// pogrubienie i wariant wąski (bez odstępu między znakami). Polskie litery są zamieniane na
+// łacińskie odpowiedniki (ą → a, Ł → L, ...).
 #pragma once
 
 #include <U8x8lib.h>
@@ -15,8 +16,9 @@
 
 namespace chocpilot {
 
-// Opis „czcionki”: {skala X, skala Y, pogrubienie (0/1)}.
+// Opis „czcionki”: {skala X, skala Y, pogrubienie (0/1), odstęp między znakami (0/1)}.
 extern const uint8_t kMiniFont1x[];
+extern const uint8_t kMiniFontCondensed[];  // 1× bez odstępu: 6 znaków w 29 px
 extern const uint8_t kMiniFontBold[];
 extern const uint8_t kMiniFont2x[];
 extern const uint8_t kMiniFont3x[];

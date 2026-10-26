@@ -1,70 +1,223 @@
-"""Podgląd ekranu OLED 128×32 – układ zgodny z firmware (display.cpp)."""
+"""Podgląd ekranu OLED 2,42" (SSD1309 128×64) – piksel w piksel jak firmware.
+
+Rysuje tym samym krojem 5×7 (skala 1×–3×, pogrubienie) i tymi samymi układami co
+firmware/src/display.cpp i mini_gfx.cpp, łącznie z zamianą polskich liter na łacińskie.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPixmap
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
+from ..core.protocol import KEY_COLS, KEY_ROWS
 from ..core.simulator import Screen
-from .theme import MONO_FAMILIES
 
-WIDTH, HEIGHT = 128, 32
+WIDTH, HEIGHT = 128, 64
 ON = QColor("#7fd8ff")
 OFF = QColor("#05080b")
 
+# Krój 5×7 z firmware (znaki ASCII 32–126, 5 kolumn na znak, bit 0 = górny wiersz).
+_FONT_5X7 = bytes.fromhex(
+    "000000000000005f00000007000700147f147f14242a7f2a12231308646236495522500005030000001c224100"
+    "0041221c00082a1c2a0808083e080800503000000808080808006060000020100804023e5149453e00427f4000"
+    "42615149462141454b311814127f1027454545393c4a49493001710905033649494936064949291e0036360000"
+    "00563600000814224100141414141400412214080201510906324979413e7e1111117e7f494949363e41414122"
+    "7f4141221c7f494949417f090909013e4149497a7f0808087f00417f41002040413f017f081422417f40404040"
+    "7f020c027f7f0408107f3e4141413e7f090909063e4151215e7f09192946464949493101017f01013f4040403f"
+    "1f2040201f3f4038403f631408146307087008076151494543007f41410002040810200041417f000402010204"
+    "4040404040000102040020545454787f484444383844444420384444487f3854545418087e090102085454543c"
+    "7f0804047800447d40002040443d007f1028440000417f40007c041804787c0804047838444444387c14141408"
+    "081414187c7c080404084854545420043f4440203c4040207c1c2040201c3c4030403c44281028440c5050503c"
+    "4464544c44000836410000007f000000413608000804081008"
+)
+_POLISH = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
 
-def _font(px: int, bold: bool = False) -> QFont:
-    font = QFont()
-    font.setFamilies(MONO_FAMILIES)
-    font.setStyleHint(QFont.StyleHint.Monospace)
-    font.setPixelSize(px)
-    font.setBold(bold)
-    font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
-    return font
+# „Czcionki” jak w firmware: (skala X, skala Y, pogrubienie, odstęp między znakami).
+SMALL = (1, 1, 0, 1)
+CONDENSED = (1, 1, 0, 0)  # 6 znaków w komórce siatki
+MEDIUM = (1, 1, 1, 1)
+LARGE = (2, 2, 0, 1)
+HUGE = (3, 3, 0, 1)
+
+# Siatka 2 × 4 (display.cpp): pasek tytułu 10 px, komórki 32 × 27 px.
+_TITLE_BAR_H = 10
+_CELL_W = WIDTH // KEY_COLS
+_CELL_TOP = _TITLE_BAR_H + 1
+_CELL_H = 27
+_CELL_LINE_CHARS = 6
 
 
-class _Fonts:
-    """Czcionki tworzone leniwie (QFont wymaga istniejącej QGuiApplication)."""
+def _ascii(text: str) -> str:
+    return "".join(ch if 32 <= ord(ch) <= 126 else "?" for ch in text.translate(_POLISH))
+
+
+class _Canvas:
+    """Odpowiednik MiniGfx: piksele 1-bitowe, kolor 1 = świeci, 0 = gaszenie."""
 
     def __init__(self) -> None:
-        self.SMALL = _font(8)
-        self.TEXT = _font(10)
-        self.MEDIUM = _font(12, bold=True)
-        self.LARGE = _font(16, bold=True)
-        self.HUGE = _font(20, bold=True)
+        self.px = [[0] * WIDTH for _ in range(HEIGHT)]
+        self.color = 1
+        self.font = SMALL
 
+    def box(self, x: int, y: int, w: int, h: int) -> None:
+        for yy in range(max(0, y), min(HEIGHT, y + h)):
+            row = self.px[yy]
+            for xx in range(max(0, x), min(WIDTH, x + w)):
+                row[xx] = self.color
 
-_fonts: _Fonts | None = None
+    def frame(self, x: int, y: int, w: int, h: int) -> None:
+        self.box(x, y, w, 1)
+        self.box(x, y + h - 1, w, 1)
+        self.box(x, y, 1, h)
+        self.box(x + w - 1, y, 1, h)
 
+    def disc(self, x: int, y: int, r: int) -> None:
+        for dy in range(-r, r + 1):
+            dx = 0
+            while (dx + 1) ** 2 + dy * dy <= r * r:
+                dx += 1
+            self.box(x - dx, y + dy, 2 * dx + 1, 1)
 
-def fonts() -> _Fonts:
-    global _fonts
-    if _fonts is None:
-        _fonts = _Fonts()
-    return _fonts
+    def circle(self, x: int, y: int, r: int) -> None:
+        self.disc(x, y, r)
+        self.color ^= 1
+        self.disc(x, y, r - 1)
+        self.color ^= 1
 
+    def advance(self) -> int:
+        return (5 + self.font[3]) * self.font[0] + self.font[2]
 
-def _center(p: QPainter, text: str, cx: int, baseline: int) -> None:
-    w = QFontMetrics(p.font()).horizontalAdvance(text)
-    p.drawText(QPoint(cx - w // 2, baseline), text)
+    def width(self, text: str, max_chars: int = 255) -> int:
+        n = min(len(_ascii(text)), max_chars)
+        return 0 if n == 0 else n * self.advance() - self.font[3] * self.font[0]
 
+    def text(self, x: int, y: int, text: str, max_chars: int = 255) -> None:
+        sx, sy, bold, _gap = self.font
+        top = y - 7 * sy
+        for ch in _ascii(text)[:max_chars]:
+            if x >= WIDTH:
+                break
+            base = (ord(ch) - 32) * 5
+            for col in range(5):
+                bits = _FONT_5X7[base + col]
+                for row in range(7):
+                    if bits >> row & 1:
+                        self.box(x + col * sx, top + row * sy, sx + bold, sy)
+            x += self.advance()
 
-def _center_fit(p: QPainter, text: str, baseline: int, fonts: list[QFont]) -> None:
-    for i, font in enumerate(fonts):
-        p.setFont(font)
-        if QFontMetrics(font).horizontalAdvance(text) <= WIDTH - 2 or i == len(fonts) - 1:
-            _center(p, text, WIDTH // 2, baseline)
+    def centered(self, text: str, cx: int, baseline: int, max_chars: int = 255) -> None:
+        self.text(cx - self.width(text, max_chars) // 2, baseline, text, max_chars)
+
+    def centered_fit(
+        self, text: str, baseline: int, fonts: list[tuple[int, int, int, int]]
+    ) -> None:
+        for i, font in enumerate(fonts):
+            self.font = font
+            w = self.width(text)
+            if w <= WIDTH - 2 or i == len(fonts) - 1:
+                self.text((WIDTH - w) // 2, baseline, text)
+                return
+
+    def marker(self, online: bool, inverted: bool = False, x: int = WIDTH - 4, y: int = 3) -> None:
+        self.color = 0 if inverted else 1
+        if online:
+            self.disc(x, y, 2)
+        else:
+            self.circle(x, y, 2)
+        self.color = 1
+
+    def cell_line(self, text: str, max_chars: int, cx: int, baseline: int) -> None:
+        n = min(len(text), max_chars)
+        self.font = SMALL if n < _CELL_LINE_CHARS else CONDENSED
+        self.centered(text, cx, baseline, n)
+
+    def cell_label(self, label: str, cx: int, top: int) -> None:
+        text = _ascii(label)
+        if len(text) <= _CELL_LINE_CHARS:
+            self.cell_line(text, _CELL_LINE_CHARS, cx, top + 17)
             return
+        first, rest = _CELL_LINE_CHARS, text[_CELL_LINE_CHARS:]
+        for i in range(_CELL_LINE_CHARS, 0, -1):
+            if text[i] == " ":
+                first, rest = i, text[i + 1 :]
+                break
+        self.cell_line(text, first, cx, top + 12)
+        self.cell_line(rest, _CELL_LINE_CHARS, cx, top + 22)
 
 
-def _marker(p: QPainter, online: bool, inverted: bool = False) -> None:
-    color = OFF if inverted else ON
-    p.setPen(color)
-    p.setBrush(color if online else Qt.BrushStyle.NoBrush)
-    p.drawEllipse(QPoint(WIDTH - 4, 3), 2, 2)
-    p.setBrush(Qt.BrushStyle.NoBrush)
-    p.setPen(ON)
+def _draw(c: _Canvas, screen: Screen) -> None:
+    kind = screen.kind
+    if kind == "splash":
+        c.font = LARGE
+        c.centered("ChocPilot", WIDTH // 2, 30)
+        c.font = SMALL
+        c.centered("fw sym.  Pro Micro", WIDTH // 2, 50)
+    elif kind == "offline":
+        c.font = LARGE
+        c.centered("Offline", WIDTH // 2, 28)
+        c.font = SMALL
+        c.centered("Czekam na aplikację", WIDTH // 2, 48)
+        c.marker(False)
+    elif kind == "idle":
+        c.font = LARGE
+        c.centered("ChocPilot", WIDTH // 2, 38)
+        c.marker(screen.online)
+    elif kind == "profile":
+        c.centered_fit(screen.title, 40, [HUGE, LARGE, MEDIUM, SMALL])
+        c.marker(screen.online)
+    elif kind == "grid":
+        c.box(0, 0, WIDTH, _TITLE_BAR_H)
+        c.font = SMALL
+        c.color = 0
+        c.text(2, 8, screen.title)
+        c.color = 1
+        c.marker(screen.online, inverted=True, x=WIDTH - 5, y=4)
+        for r in range(KEY_ROWS):
+            for col in range(KEY_COLS):
+                i = r * KEY_COLS + col
+                label = screen.labels[i] if i < len(screen.labels) else ""
+                c.cell_label(label, col * _CELL_W + _CELL_W // 2 - 1, _CELL_TOP + r * _CELL_H)
+        for col in range(1, KEY_COLS):
+            c.box(col * _CELL_W - 1, _CELL_TOP, 1, HEIGHT - _CELL_TOP)
+        c.box(0, _CELL_TOP + _CELL_H - 1, WIDTH, 1)
+    elif kind == "text":
+        if not screen.line2:
+            c.centered_fit(screen.line1, 40, [HUGE, LARGE, MEDIUM, SMALL])
+        else:
+            c.centered_fit(screen.line1, 26, [LARGE, MEDIUM, SMALL])
+            c.centered_fit(screen.line2, 50, [MEDIUM, SMALL])
+    elif kind == "bar":
+        c.font = MEDIUM
+        c.text(0, 14, screen.title)
+        pct = f"{screen.value}%"
+        c.text(WIDTH - c.width(pct), 14, pct)
+        c.frame(0, 26, WIDTH, 24)
+        fill = (WIDTH - 4) * screen.value // 100
+        if fill > 0:
+            c.box(2, 28, fill, 20)
+    elif kind == "flash":
+        c.centered_fit(screen.line1, 42, [HUGE, LARGE, MEDIUM, SMALL])
+        if screen.key:
+            c.font = SMALL
+            c.text(0, 8, f"K{screen.key}")
+    elif kind == "test":
+        c.font = SMALL
+        c.text(0, 8, "TEST")
+        hint = "K1+K4 3s: koniec"
+        c.text(WIDTH - c.width(hint), 8, hint)
+        for r in range(KEY_ROWS):
+            for col in range(KEY_COLS):
+                key = r * KEY_COLS + col
+                x, y = col * _CELL_W + 1, _CELL_TOP + 1 + r * _CELL_H
+                w, h = _CELL_W - 3, _CELL_H - 4
+                if key < len(screen.test_keys) and screen.test_keys[key]:
+                    c.box(x, y, w, h)
+                    c.color = 0
+                else:
+                    c.frame(x, y, w, h)
+                c.centered(str(key + 1), x + w // 2, y + 15)
+                c.color = 1
 
 
 def render(screen: Screen) -> QImage:
@@ -72,78 +225,13 @@ def render(screen: Screen) -> QImage:
     image.fill(OFF)
     if screen.kind == "off":
         return image
-    p = QPainter(image)
-    p.setPen(ON)
-    f = fonts()
-    SMALL, TEXT, MEDIUM, LARGE, HUGE = f.SMALL, f.TEXT, f.MEDIUM, f.LARGE, f.HUGE
-    kind = screen.kind
-    if kind == "splash":
-        p.setFont(HUGE)
-        _center(p, "ChocPilot", WIDTH // 2, 20)
-        p.setFont(SMALL)
-        _center(p, "fw sym.", WIDTH // 2, 31)
-    elif kind == "offline":
-        p.setFont(MEDIUM)
-        _center(p, "Offline", WIDTH // 2, 13)
-        p.setFont(TEXT)
-        _center(p, "Czekam na aplikację", WIDTH // 2, 28)
-        _marker(p, False)
-    elif kind == "idle":
-        p.setFont(LARGE)
-        _center(p, "ChocPilot", WIDTH // 2, 22)
-        _marker(p, screen.online)
-    elif kind == "profile":
-        _center_fit(p, screen.title, 23, [LARGE, MEDIUM, TEXT, SMALL])
-        _marker(p, screen.online)
-    elif kind == "grid":
-        p.fillRect(QRect(0, 0, WIDTH, 8), ON)
-        p.setPen(OFF)
-        p.setFont(SMALL)
-        p.drawText(QPoint(2, 7), screen.title)
-        _marker(p, screen.online, inverted=True)
-        p.setPen(ON)
-        for r in range(3):
-            for c in range(3):
-                label = screen.labels[r * 3 + c] if len(screen.labels) > r * 3 + c else ""
-                _center(p, label, c * 43 + 21, 15 + r * 8)
-        p.drawLine(42, 9, 42, 31)
-        p.drawLine(85, 9, 85, 31)
-    elif kind == "text":
-        if not screen.line2:
-            _center_fit(p, screen.line1, 23, [LARGE, MEDIUM, TEXT])
-        else:
-            _center_fit(p, screen.line1, 13, [MEDIUM, TEXT])
-            _center_fit(p, screen.line2, 29, [TEXT, SMALL])
-    elif kind == "bar":
-        p.setFont(TEXT)
-        p.drawText(QPoint(0, 10), screen.title)
-        pct = f"{screen.value}%"
-        p.drawText(QPoint(WIDTH - QFontMetrics(TEXT).horizontalAdvance(pct), 10), pct)
-        p.drawRect(QRect(0, 16, WIDTH - 1, 13))
-        fill = (WIDTH - 4) * screen.value // 100
-        if fill > 0:
-            p.fillRect(QRect(2, 18, fill, 10), ON)
-    elif kind == "flash":
-        _center_fit(p, screen.line1, 24, [HUGE, LARGE, MEDIUM, TEXT])
-        if screen.key:
-            p.setFont(SMALL)
-            p.drawText(QPoint(0, 7), f"K{screen.key}")
-    elif kind == "test":
-        for r in range(3):
-            for c in range(3):
-                rect = QRect(1 + c * 11, 1 + r * 10, 8, 8)
-                pressed = screen.test_keys[r * 3 + c] if screen.test_keys else False
-                if pressed:
-                    p.fillRect(rect, ON)
-                else:
-                    p.drawRect(rect)
-        p.setBrush(ON if screen.test_keys and screen.test_keys[9] else Qt.BrushStyle.NoBrush)
-        p.drawEllipse(QPoint(43, 15), 6, 6)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.setFont(SMALL)
-        p.drawText(QPoint(56, 7), "TEST")
-        p.drawText(QPoint(56, 28), f"zab {screen.test_steps}")
-    p.end()
+    canvas = _Canvas()
+    _draw(canvas, screen)
+    on = ON.rgb()
+    for y, row in enumerate(canvas.px):
+        for x, value in enumerate(row):
+            if value:
+                image.setPixel(x, y, on)
     if screen.flip:
         image = image.mirrored(True, True)
     return image

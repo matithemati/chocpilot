@@ -26,11 +26,11 @@ class PortInfo:
 def test_candidate_ports_prefers_product_name() -> None:
     ports = [
         PortInfo("COM1", vid=0x1234, description="Bluetooth"),
-        PortInfo("COM5", vid=0x239A, description="USB Serial Device"),
-        PortInfo("COM9", vid=0x2E8A, product="ChocPilot"),
-        PortInfo("COM7", vid=0x303A),
+        PortInfo("COM5", vid=0x1B4F, pid=0x9206, description="USB Serial Device"),
+        PortInfo("COM9", vid=0x1B4F, pid=0x9206, product="ChocPilot"),
+        PortInfo("COM7", vid=0x303A),  # ESP32 – nie ChocPilot
     ]
-    assert candidate_ports(ports) == ["COM9", "COM5", "COM7"]
+    assert candidate_ports(ports) == ["COM9", "COM5"]
 
 
 def test_candidate_ports_pro_micro_only_application_pids() -> None:
@@ -91,7 +91,7 @@ def wait_for(predicate, timeout: float = 3.0) -> bool:
 
 
 def test_serial_transport_detects_and_reconnects() -> None:
-    device = SimulatedDevice(board="xiao_esp32s3")
+    device = SimulatedDevice()
     serials: list[FakeSerial] = []
 
     def factory() -> FakeSerial:
@@ -114,7 +114,7 @@ def test_serial_transport_detects_and_reconnects() -> None:
         assert wait_for(lambda: transport.connected)
         assert transport.port_name == "COM9"
         assert transport.device_info is not None
-        assert transport.device_info.board_name == "XIAO ESP32-S3"
+        assert transport.device_info.board_name == "Pro Micro"
         assert device.online
 
         device.press(3)
@@ -176,11 +176,10 @@ def test_simulated_device_fallback_hid_when_offline() -> None:
     )
     clock.advance(5)
     device.press(1)
-    device.rotate(2)
+    device.press(8)
     assert device.hid_log == [
         "1: {'mods': ['ctrl'], 'code': 'c'}",
-        "enc_cw: {'media': 'vol_up'}",
-        "enc_cw: {'media': 'vol_up'}",
+        "8: {'media': 'mute'}",
     ]
 
 
@@ -192,8 +191,8 @@ def test_simulator_transport_end_to_end() -> None:
     transport.start()
     assert transport.connected
     assert transport.port_name == "symulator"
-    device.rotate(-1)
-    assert received[-1]["type"] == "enc" and received[-1]["steps"] == -1
+    device.press(2)
+    assert received[-1] == {"type": "key", "key": 2, "action": "down", "t": received[-1]["t"]}
     assert transport.send(protocol.msg_flash("Hej", 1))
     assert device.screen().kind in ("flash", "splash")
 
@@ -204,11 +203,11 @@ def test_simulated_pro_micro_needs_split_fallback() -> None:
     device.handle_line(protocol.encode(protocol.msg_hello("x")))
     assert out[-1]["board"] == "promicro" and out[-1]["max_line"] == 272
 
-    bindings = [protocol.FallbackBinding(i, ("ctrl", "shift", "alt"), "f12") for i in range(1, 11)]
+    bindings = [protocol.FallbackBinding(i, ("ctrl", "shift", "alt"), "f12") for i in range(1, 9)]
     device.handle_line(protocol.encode(protocol.msg_set_fallback(bindings)))
     assert out[-1] == {"type": "error", "msg": "line too long"}
 
     for i, message in enumerate(protocol.msgs_set_fallback(bindings, device.max_line)):
         device.handle_line(protocol.encode({**message, "id": i}))
         assert out[-1] == {"type": "ack", "id": i}
-    assert set(device.fallback) == {str(i) for i in range(1, 11)}
+    assert set(device.fallback) == {str(i) for i in range(1, 9)}

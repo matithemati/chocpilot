@@ -1,4 +1,4 @@
-"""Panele edycji: klawisz, pokrętło, profil."""
+"""Panele edycji: klawisz, profil."""
 
 from __future__ import annotations
 
@@ -8,22 +8,19 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QColorDialog,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QPushButton,
     QStackedWidget,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from ..core import osinfo
-from ..core.actions import ActionBase, make_action
 from ..core.config import KeyBinding, Profile
-from ..core.protocol import ENCODER_KEY, LABEL_CHARS, transliterate
+from ..core.protocol import LABEL_CHARS, transliterate
 from . import theme
 from .action_editor import ActionEditor, EditorContext
 from .i18n import tr
@@ -226,10 +223,8 @@ class KeyEditor(QWidget):
 
     def bind(self, key: int, binding: KeyBinding) -> None:
         self.binding = binding
-        self.title.setText(
-            f"{tr('Klawisz')} K{key}" if key != ENCODER_KEY else tr("Przycisk pokrętła")
-        )
-        self.badge.setText(f"K{key}" if key != ENCODER_KEY else "◎")
+        self.title.setText(f"{tr('Klawisz')} K{key}")
+        self.badge.setText(f"K{key}")
         self.label.set_text(binding.label)
         self.color.set_color(binding.color)
         _badge_style(self.badge, binding.color)
@@ -263,175 +258,6 @@ class KeyEditor(QWidget):
             self.binding.set_action(gesture, self.editors[gesture].action())
             self._update_tab_titles()
             self.changed.emit()
-
-
-ENCODER_TABS = (
-    ("rotate_cw", "W prawo"),
-    ("rotate_ccw", "W lewo"),
-    ("press_rotate_cw", "Wciśnięte + w prawo"),
-    ("press_rotate_ccw", "Wciśnięte + w lewo"),
-)
-
-
-def _preset_actions(name: str, process: str = "") -> dict[str, ActionBase | None]:
-    if name == "system_volume":
-        return {
-            "rotate_cw": make_action("media", key="vol_up"),
-            "rotate_ccw": make_action("media", key="vol_down"),
-        }
-    if name == "app_volume":
-        return {
-            "rotate_cw": make_action("app_volume", process=process, mode="up"),
-            "rotate_ccw": make_action("app_volume", process=process, mode="down"),
-        }
-    if name == "scroll":
-        return {
-            "rotate_cw": make_action("scroll", direction="down", lines=3),
-            "rotate_ccw": make_action("scroll", direction="up", lines=3),
-        }
-    if name == "hscroll":
-        return {
-            "rotate_cw": make_action("scroll", direction="right", lines=3),
-            "rotate_ccw": make_action("scroll", direction="left", lines=3),
-        }
-    if name == "zoom":
-        return {
-            "rotate_cw": make_action("hotkey", keys="ctrl+plus"),
-            "rotate_ccw": make_action("hotkey", keys="ctrl+-"),
-        }
-    if name == "tracks":
-        return {
-            "rotate_cw": make_action("media", key="next"),
-            "rotate_ccw": make_action("media", key="prev"),
-        }
-    if name == "profiles":
-        return {
-            "rotate_cw": make_action("profile", mode="next"),
-            "rotate_ccw": make_action("profile", mode="prev"),
-        }
-    return {}
-
-
-PRESETS = (
-    ("system_volume", "Głośność systemu"),
-    ("app_volume", "Głośność programu…"),
-    ("scroll", "Przewijanie pionowe"),
-    ("hscroll", "Przewijanie poziome"),
-    ("zoom", "Zoom (Ctrl +/−)"),
-    ("tracks", "Utwory (następny/poprzedni)"),
-    ("profiles", "Zmiana profilu"),
-)
-
-
-class EncoderEditor(QWidget):
-    """Obroty (zwykłe i z wciśniętym przyciskiem), gesty przycisku i szybkie presety."""
-
-    changed = Signal()
-    closeRequested = Signal()
-
-    def __init__(self, context: EditorContext, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.context = context
-        self.profile: Profile | None = None
-        badge = label("◎", "badge")
-        badge.setFixedSize(40, 40)
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _badge_style(badge, theme.tokens()["accent"])
-        head, close = inspector_header(tr("Pokrętło"), label(tr("Pokrętło"), "h2"), badge)
-        close.clicked.connect(self.closeRequested)
-
-        presets = frame("soft")
-        self.preset_combo = combo()
-        for key, text in PRESETS:
-            self.preset_combo.addItem(tr(text), key)
-        self.preset_target = combo()
-        self.preset_target.addItem(tr("Obrót bez wciśnięcia"), "")
-        self.preset_target.addItem(tr("Obrót z wciśniętym przyciskiem"), "press_")
-        self.process_combo = combo()
-        self.process_combo.setEditable(True)
-        self.process_combo.lineEdit().setPlaceholderText(
-            tr("proces, np. {name}").format(name=osinfo.example_process("audio"))
-        )
-        apply = button(tr("Zastosuj"), primary=True)
-        apply.clicked.connect(self._apply_preset)
-        self.preset_combo.currentIndexChanged.connect(self._preset_changed)
-        grid = QGridLayout(presets)
-        grid.setContentsMargins(14, 12, 14, 14)
-        grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(8)
-        grid.addWidget(label(tr("Szybkie presety"), "strong"), 0, 0, 1, 2)
-        grid.addWidget(self.preset_target, 1, 0)
-        grid.addWidget(self.preset_combo, 1, 1)
-        grid.addWidget(self.process_combo, 2, 0)
-        grid.addWidget(apply, 2, 1, Qt.AlignmentFlag.AlignRight)
-        self._preset_changed()
-
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.editors: dict[str, ActionEditor] = {}
-        for gesture, text in ENCODER_TABS:
-            editor = ActionEditor(context)
-            editor.changed.connect(lambda g=gesture: self._action_changed(g))
-            self.editors[gesture] = editor
-            page = QWidget()
-            pl = QVBoxLayout(page)
-            pl.setContentsMargins(0, 14, 0, 0)
-            pl.addWidget(editor)
-            self.tabs.addTab(page, tr(text))
-
-        self.button_editor = KeyEditor(context)
-        self.button_editor.header.hide()
-        self.button_editor.changed.connect(self.changed)
-        page = QWidget()
-        pl = QVBoxLayout(page)
-        pl.setContentsMargins(0, 14, 0, 0)
-        pl.addWidget(self.button_editor)
-        self.tabs.addTab(page, tr("Przycisk"))
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
-        layout.addLayout(head)
-        layout.addWidget(presets)
-        layout.addWidget(self.tabs, 1)
-
-    def bind(self, profile: Profile) -> None:
-        self.profile = profile
-        for gesture, editor in self.editors.items():
-            editor.set_action(profile.encoder.action_for(gesture))
-        self.button_editor.bind(ENCODER_KEY, profile.keys[ENCODER_KEY])
-        self._update_tab_titles()
-
-    def _update_tab_titles(self) -> None:
-        if self.profile is None:
-            return
-        for i, (gesture, text) in enumerate(ENCODER_TABS):
-            mark = " ●" if self.profile.encoder.action_for(gesture) else ""
-            self.tabs.setTabText(i, tr(text) + mark)
-
-    def _action_changed(self, gesture: str) -> None:
-        if self.profile is not None:
-            self.profile.encoder.set_action(gesture, self.editors[gesture].action())
-            self._update_tab_titles()
-            self.changed.emit()
-
-    def _preset_changed(self) -> None:
-        is_app = self.preset_combo.currentData() == "app_volume"
-        self.process_combo.setVisible(is_app)
-        if is_app and self.process_combo.count() == 0:
-            self.process_combo.addItems(self.context.audio_processes())
-
-    def _apply_preset(self) -> None:
-        if self.profile is None:
-            return
-        prefix = self.preset_target.currentData()
-        actions = _preset_actions(
-            self.preset_combo.currentData(), self.process_combo.currentText().strip()
-        )
-        for gesture, action in actions.items():
-            self.profile.encoder.set_action(prefix + gesture, action)
-        self.bind(self.profile)
-        self.changed.emit()
 
 
 class ProfileEditor(QWidget):
@@ -566,4 +392,4 @@ class ProfileEditor(QWidget):
         self.changed.emit()
 
 
-__all__ = ["ColorButton", "EncoderEditor", "KeyEditor", "LabelEdit", "ProfileEditor", "styled"]
+__all__ = ["ColorButton", "KeyEditor", "LabelEdit", "ProfileEditor", "styled"]

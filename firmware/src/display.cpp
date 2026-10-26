@@ -16,6 +16,7 @@ namespace {
 MiniGfx u8g2;
 
 const uint8_t* const kFontSmall = kMiniFont1x;
+const uint8_t* const kFontCondensed = kMiniFontCondensed;
 const uint8_t* const kFontMedium = kMiniFontBold;
 const uint8_t* const kFontLarge = kMiniFont2x;
 const uint8_t* const kFontHuge = kMiniFont3x;
@@ -25,12 +26,13 @@ constexpr int kHeight = MiniGfx::kHeight;
 constexpr uint32_t kSplashMs = 1500;
 constexpr uint32_t kTestRedrawMs = 50;
 
-// Siatka 2 × 4 pod paskiem tytułu: komórki 32 × 27 px, etykieta w 1 albo 2 wierszach po 5 znaków.
+// Siatka 2 × 4 pod paskiem tytułu: komórki 32 × 27 px, etykieta w 1 albo 2 wierszach po 6 znaków
+// (6 znaków krojem wąskim).
 constexpr int kTitleBarH = 10;
 constexpr int kCellW = kWidth / kCols;
 constexpr int kCellTop = kTitleBarH + 1;
 constexpr int kCellH = 27;
-constexpr uint8_t kCellLineChars = 5;
+constexpr uint8_t kCellLineChars = 6;
 
 // Rysuje napis wyśrodkowany w poziomie, wybierając największą czcionkę, która się mieści.
 void drawCenteredFit(const char* text, int baseline, const uint8_t* const* fonts, int count) {
@@ -49,11 +51,19 @@ void drawCentered(const char* text, int cx, int baseline, uint8_t maxChars = 0xF
   u8g2.drawUTF8(cx - w / 2, baseline, text, maxChars);
 }
 
-// Etykieta klawisza w komórce siatki: do 5 znaków w jednym wierszu, dłuższa w dwóch
-// (podział na spacji, jeśli wypada w pierwszych 5 znakach).
+// Wiersz etykiety: do 5 znaków zwykłym krojem, 6 – wąskim (komórka ma 31 px).
+void drawCellLine(const char* text, uint8_t maxChars, int cx, int baseline) {
+  uint8_t n = MiniGfx::charCount(text);
+  if (n > maxChars) n = maxChars;
+  u8g2.setFont(n < kCellLineChars ? kFontSmall : kFontCondensed);
+  drawCentered(text, cx, baseline, n);
+}
+
+// Etykieta klawisza w komórce siatki: do 6 znaków w jednym wierszu, dłuższa w dwóch
+// (podział na spacji, jeśli wypada w pierwszych 6 znakach).
 void drawCellLabel(const char* label, int cx, int top) {
   if (MiniGfx::charCount(label) <= kCellLineChars) {
-    drawCentered(label, cx, top + 17);
+    drawCellLine(label, kCellLineChars, cx, top + 17);
     return;
   }
   uint8_t first = kCellLineChars;
@@ -66,8 +76,8 @@ void drawCellLabel(const char* label, int cx, int top) {
       break;
     }
   }
-  drawCentered(label, cx, top + 12, first);
-  drawCentered(rest, cx, top + 22, kCellLineChars);
+  drawCellLine(label, first, cx, top + 12);
+  drawCellLine(rest, kCellLineChars, cx, top + 22);
 }
 
 // --- programowe sprawdzenie adresu I²C (linie open-drain emulowane przez INPUT_PULLUP);

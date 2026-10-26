@@ -16,12 +16,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--simulate", action="store_true", help="użyj symulatora zamiast urządzenia"
     )
-    parser.add_argument(
-        "--board",
-        choices=["kb2040", "xiao_esp32s3", "promicro"],
-        default="kb2040",
-        help="płytka zgłaszana przez symulator",
-    )
     parser.add_argument("--minimized", action="store_true", help="start w zasobniku")
     parser.add_argument("--config", type=Path, help="ścieżka pliku konfiguracji")
     parser.add_argument("--verbose", action="store_true", help="szczegółowy dziennik na konsoli")
@@ -35,7 +29,6 @@ def main(argv: list[str] | None = None) -> int:
         minimized=args.minimized,
         config_path=args.config,
         verbose=args.verbose,
-        board=args.board,
     )
 
 

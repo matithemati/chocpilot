@@ -5,7 +5,6 @@ import pytest
 from chocpilot.core import protocol
 from chocpilot.core.protocol import (
     DeviceInfo,
-    EncoderEvent,
     ErrorEvent,
     FallbackBinding,
     KeyEvent,
@@ -40,9 +39,10 @@ def test_transliteration() -> None:
 def test_display_grid_pads_and_truncates() -> None:
     msg = protocol.msg_display_grid("Domyślny", ["Kalkulator", "Łódź"])
     assert msg["title"] == "Domyslny"
-    assert msg["labels"][:2] == ["Kalkula", "Lodz"]
-    assert len(msg["labels"]) == 9
-    assert msg["labels"][8] == ""
+    assert msg["labels"][:2] == ["Kalkulator", "Lodz"]
+    assert len(msg["labels"]) == 8
+    assert msg["labels"][7] == ""
+    assert protocol.msg_display_grid("T", ["Kalkulatory"])["labels"][0] == "Kalkulator"
 
 
 def test_display_bar_clamps() -> None:
@@ -67,7 +67,7 @@ def test_settings_validation() -> None:
     with pytest.raises(ProtocolError):
         protocol.msg_settings(flip=1)
     with pytest.raises(ProtocolError):
-        protocol.msg_settings(enc_pulses=True)
+        protocol.msg_settings(enc_pulses=4)  # ChocPilot nie ma pokrętła
     with pytest.raises(ProtocolError):
         protocol.msg_settings(color="red")
 
@@ -76,7 +76,7 @@ def test_set_fallback_message() -> None:
     msg = protocol.msg_set_fallback(
         [
             FallbackBinding(1, mods=("ctrl", "shift"), code="c"),
-            FallbackBinding("enc_cw", media="vol_up"),
+            FallbackBinding(8, media="vol_up"),
             FallbackBinding(5),
         ]
     )
@@ -85,7 +85,7 @@ def test_set_fallback_message() -> None:
         "replace": True,
         "bindings": [
             {"key": 1, "mods": ["ctrl", "shift"], "code": "c"},
-            {"key": "enc_cw", "media": "vol_up"},
+            {"key": 8, "media": "vol_up"},
             {"key": 5},
         ],
     }
@@ -93,16 +93,15 @@ def test_set_fallback_message() -> None:
 
 def test_parse_device_messages() -> None:
     info = protocol.parse_device_message(
-        {"type": "hello", "device": "chocpilot", "fw": "1.0.0", "board": "xiao_esp32s3", "keys": 10}
+        {"type": "hello", "device": "chocpilot", "fw": "1.0.0", "board": "promicro", "keys": 8}
     )
     assert isinstance(info, DeviceInfo)
-    assert info.board_name == "XIAO ESP32-S3"
+    assert info.board_name == "Pro Micro" and info.keys == 8 and not info.encoder
     assert protocol.parse_device_message(
-        {"type": "key", "key": 10, "action": "up", "t": 5}
-    ) == KeyEvent(10, False, 5)
-    assert protocol.parse_device_message({"type": "enc", "steps": -3, "t": 9}) == EncoderEvent(
-        -3, 9
-    )
+        {"type": "key", "key": 8, "action": "up", "t": 5}
+    ) == KeyEvent(8, False, 5)
+    # Zdarzenia pokrętła (enc) nie istnieją w ChocPilot – ignorowane jak nieznany typ.
+    assert protocol.parse_device_message({"type": "enc", "steps": -3, "t": 9}) is None
     assert protocol.parse_device_message({"type": "error", "msg": "invalid json"}) == ErrorEvent(
         None, "invalid json"
     )
@@ -113,9 +112,8 @@ def test_parse_device_messages() -> None:
     "msg",
     [
         {"type": "hello", "device": "other"},
-        {"type": "key", "key": 11, "action": "down"},
+        {"type": "key", "key": 9, "action": "down"},
         {"type": "key", "key": 1, "action": "pressed"},
-        {"type": "enc", "steps": "2"},
         {"type": "key", "key": True, "action": "down"},
     ],
 )
@@ -125,7 +123,7 @@ def test_parse_device_message_invalid(msg: dict) -> None:
 
 
 def test_hello_display_diagnostics() -> None:
-    base = {"type": "hello", "device": "chocpilot", "fw": "1.0.1", "board": "kb2040"}
+    base = {"type": "hello", "device": "chocpilot", "fw": "1.0.1", "board": "promicro"}
     old = protocol.parse_device_message(base)
     assert isinstance(old, DeviceInfo) and not old.has_diag and old.oled_status == "?"
     found = protocol.parse_device_message({**base, "oled": 0x3D, "i2c": [0x3D, 0x50]})
@@ -143,7 +141,7 @@ def test_hello_line_levels_and_swap() -> None:
             "type": "hello",
             "device": "chocpilot",
             "fw": "1.0.3",
-            "board": "kb2040",
+            "board": "promicro",
             "oled": None,
             "i2c": [],
             "lines": {"sda": 0, "scl": 1},
@@ -167,11 +165,7 @@ def test_hello_pro_micro_max_line() -> None:
 
 
 def test_set_fallback_split_for_small_devices() -> None:
-    bindings = [FallbackBinding(i, ("ctrl", "shift", "alt"), "f12") for i in range(1, 11)]
-    bindings += [
-        FallbackBinding("enc_cw", media="vol_up"),
-        FallbackBinding("enc_ccw", media="mute"),
-    ]
+    bindings = [FallbackBinding(i, ("ctrl", "shift", "alt"), "f12") for i in range(1, 9)]
     whole = protocol.msgs_set_fallback(bindings)
     assert whole == [protocol.msg_set_fallback(bindings, replace=True)]
 

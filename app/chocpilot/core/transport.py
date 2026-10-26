@@ -15,10 +15,8 @@ from .protocol import DeviceInfo, ProtocolError
 
 log = logging.getLogger("chocpilot.transport")
 
-# VID płytek: Espressif (ESP32-S3 TinyUSB), Adafruit (KB2040), Seeed (wariant XIAO ESP32-S3
-# ustawia własny VID 0x2886). Nazwa produktu USB „ChocPilot” ma pierwszeństwo.
-KNOWN_VIDS = {0x303A: "Espressif", 0x239A: "Adafruit", 0x2886: "Seeed"}
-# Pro Micro (ATmega32U4): tylko PID-y programu, nigdy bootloadera Caterina (1B4F:9205 / 9203,
+# Nazwa produktu USB „ChocPilot” ma pierwszeństwo. Zapasowo VID:PID Pro Micro (ATmega32U4):
+# tylko PID-y programu, nigdy bootloadera Caterina (1B4F:9205 / 9203,
 # 2341:0036 / 0037) – bajty „hello” byłyby dla niego komendami (np. „e” = kasowanie flash).
 # Inne płytki Arduino (np. Uno) pomijamy też dlatego, że otwarcie portu je resetuje.
 KNOWN_VID_PIDS = {
@@ -104,7 +102,7 @@ def candidate_ports(ports: Iterable[Any] | None = None) -> list[str]:
             by_name.append(port.device)
         else:
             vid = getattr(port, "vid", None)
-            if vid in KNOWN_VIDS or (vid, getattr(port, "pid", None)) in KNOWN_VID_PIDS:
+            if (vid, getattr(port, "pid", None)) in KNOWN_VID_PIDS:
                 by_vid.append(port.device)
     return by_name + by_vid
 

@@ -41,42 +41,34 @@ def test_main_window_edit_key(window, qtbot) -> None:
     win, controller, device, platform = window
     qtbot.waitUntil(lambda: controller.transport.connected, timeout=2000)
 
-    win.device_view.tiles[5].clicked.emit(5)
+    win.device_view.tiles[3].clicked.emit(3)
     assert win.stack.currentWidget() is win.key_editor
     assert win.key_editor.label.edit.text() == "Kopiuj"
 
     # zmiana etykiety → konfiguracja i ekran urządzenia
     win.key_editor.label.edit.setText("Ctrl+C")
-    assert controller.config.profiles[0].keys[5].label == "Ctrl+C"
+    assert controller.config.profiles[0].keys[3].label == "Ctrl+C"
     qtbot.waitUntil(
-        lambda: device.screen().kind == "grid" and device.screen().labels[4] == "Ctrl+C",
+        lambda: device.screen().kind == "grid" and device.screen().labels[2] == "Ctrl+C",
         timeout=3000,
     )
 
     # zmiana akcji na multimedia przez edytor
     editor = win.key_editor.editors["tap"]
     editor.type_combo.setCurrentIndex(editor.type_combo.findData("media"))
-    assert isinstance(controller.config.profiles[0].keys[5].tap, MediaAction)
+    assert isinstance(controller.config.profiles[0].keys[3].tap, MediaAction)
 
     # fizyczne naciśnięcie (symulator) → akcja i podświetlenie
-    device.press(5)
-    qtbot.waitUntil(lambda: win.device_view.tiles[5].pressed_flash > 0, timeout=2000)
-    device.release(5)
+    device.press(3)
+    qtbot.waitUntil(lambda: win.device_view.tiles[3].pressed_flash > 0, timeout=2000)
+    device.release(3)
     qtbot.waitUntil(lambda: ("media", "play_pause") in platform.calls, timeout=2000)
 
 
-def test_encoder_presets_and_hotkey_record(window, qtbot) -> None:
+def test_hotkey_record(window, qtbot) -> None:
     from PySide6.QtCore import Qt
 
     win, controller, device, platform = window
-    win.device_view.knob.clicked.emit()
-    assert win.stack.currentWidget() is win.encoder_editor
-    enc = win.encoder_editor
-    enc.preset_combo.setCurrentIndex(enc.preset_combo.findData("zoom"))
-    enc._apply_preset()
-    cw = controller.config.profiles[0].encoder.rotate_cw
-    assert isinstance(cw, HotkeyAction) and cw.keys == "ctrl+plus"
-
     # nagrywanie skrótu
     win.device_view.tiles[1].clicked.emit(1)
     editor = win.key_editor.editors["hold"]
@@ -129,17 +121,17 @@ def test_oled_render_all_modes(qtbot) -> None:
     from chocpilot.gui.oled import render
 
     for screen in (
-        Screen(kind="grid", title="Domyslny", labels=("Kalk",) * 9, online=True),
+        Screen(kind="grid", title="Domyslny", labels=("Kalk", "Play Pause") * 4, online=True),
         Screen(kind="profile", title="Stream"),
         Screen(kind="bar", title="Vol", value=50),
         Screen(kind="text", line1="A", line2="B"),
         Screen(kind="flash", line1="Spotify", key=3),
-        Screen(kind="test", test_keys=(True,) * 10, test_steps=3),
+        Screen(kind="test", test_keys=(True, False) * 4),
         Screen(kind="offline"),
         Screen(kind="off"),
     ):
         image = render(screen)
-        assert image.width() == 128 and image.height() == 32
+        assert image.width() == 128 and image.height() == 64
 
 
 def test_language_switch_rebuilds_ui(window, qtbot) -> None:

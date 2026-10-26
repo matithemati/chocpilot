@@ -14,7 +14,7 @@ from ..core.protocol import DeviceInfo
 
 class QtBridge(QObject, ControllerListener):
     connectionChanged = Signal(bool, object, object)  # connected, DeviceInfo|None, port|None
-    rawInput = Signal(object, bool, int)  # key|None, down, steps
+    rawInput = Signal(int, bool)  # klawisz, wciśnięty  # key|None, down, steps
     gestureFired = Signal(object, object)  # GestureEvent, ActionBase|None
     profileChanged = Signal(object, str)  # Profile, reason
     actionFinished = Signal(str, object)  # summary, error|None
@@ -27,8 +27,8 @@ class QtBridge(QObject, ControllerListener):
     ) -> None:
         self.connectionChanged.emit(connected, info, port)
 
-    def raw_input(self, key: int | None, down: bool, steps: int) -> None:
-        self.rawInput.emit(key, down, steps)
+    def raw_input(self, key: int, down: bool) -> None:
+        self.rawInput.emit(key, down)
 
     def gesture(self, event: GestureEvent, action: ActionBase | None) -> None:
         self.gestureFired.emit(event, action)

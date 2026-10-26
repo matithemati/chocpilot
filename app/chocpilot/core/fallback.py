@@ -5,7 +5,7 @@ from __future__ import annotations
 from .actions import ActionBase, parse_hotkey
 from .actions.builtin import FUNCTION_KEYS, HotkeyAction, MediaAction
 from .config import FallbackSettings, Profile
-from .protocol import FallbackBinding
+from .protocol import KEY_COUNT, FallbackBinding
 
 # Klawisze, które firmware zna po nazwie (docs/PROTOCOL.md, set_fallback.code).
 _HID_SPECIAL = {
@@ -17,14 +17,16 @@ _HID_PUNCT = set("-=[]\\;'`,./")
 _MODS = {"ctrl", "shift", "alt", "win"}
 _MEDIA = {"play_pause", "next", "prev", "stop", "vol_up", "vol_down", "mute"}
 
+# Jak w firmware: dolny rząd steruje dźwiękiem, gdy profil nie przypisuje tam skrótu.
 DEFAULTS = {
-    "10": FallbackBinding(10, media="mute"),
-    "enc_cw": FallbackBinding("enc_cw", media="vol_up"),
-    "enc_ccw": FallbackBinding("enc_ccw", media="vol_down"),
+    "5": FallbackBinding(5, media="vol_down"),
+    "6": FallbackBinding(6, media="vol_up"),
+    "7": FallbackBinding(7, media="play_pause"),
+    "8": FallbackBinding(8, media="mute"),
 }
 
 
-def binding_from_action(slot: int | str, action: ActionBase | None) -> FallbackBinding | None:
+def binding_from_action(slot: int, action: ActionBase | None) -> FallbackBinding | None:
     """Zamienia akcję hotkey/media na skrót HID; inne typy nie mają odpowiednika."""
     if isinstance(action, MediaAction) and action.key in _MEDIA:
         return FallbackBinding(slot, media=action.key)
@@ -55,18 +57,13 @@ def binding_from_action(slot: int | str, action: ActionBase | None) -> FallbackB
 def compute_fallback(profile: Profile | None, settings: FallbackSettings) -> list[FallbackBinding]:
     slots: dict[str, FallbackBinding] = dict(DEFAULTS)
     if settings.from_profile and profile is not None:
-        for key in range(1, 11):
+        for key in range(1, KEY_COUNT + 1):
             binding = binding_from_action(key, profile.keys[key].tap)
             if binding is not None:
                 slots[str(key)] = binding
-        for slot, gesture in (("enc_cw", "rotate_cw"), ("enc_ccw", "rotate_ccw")):
-            binding = binding_from_action(slot, profile.encoder.action_for(gesture))
-            if binding is not None:
-                slots[slot] = binding
     for entry in settings.custom:
-        slot_value: int | str = int(entry.slot) if entry.slot.isdigit() else entry.slot
         slots[entry.slot] = FallbackBinding(
-            slot_value, mods=tuple(entry.mods), code=entry.code, media=entry.media
+            int(entry.slot), mods=tuple(entry.mods), code=entry.code, media=entry.media
         )
-    order = [str(i) for i in range(1, 11)] + ["enc_cw", "enc_ccw"]
+    order = [str(i) for i in range(1, KEY_COUNT + 1)]
     return [slots[s] for s in order if s in slots]

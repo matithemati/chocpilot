@@ -14,7 +14,7 @@ STATUS_COLORS = {
 
 
 def app_pixmap(size: int = 256, status: str | None = None) -> QPixmap:
-    """Logo ChocPilot: zaokrąglony kwadrat z siatką 3×3 i pokrętłem."""
+    """Logo ChocPilot: zaokrąglony kwadrat z ekranem i dwoma rzędami płaskich klawiszy."""
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
     p = QPainter(pix)
@@ -23,23 +23,19 @@ def app_pixmap(size: int = 256, status: str | None = None) -> QPixmap:
     p.setPen(Qt.PenStyle.NoPen)
     p.setBrush(QColor("#1f2933"))
     p.drawRoundedRect(QRectF(2 * s, 2 * s, 60 * s, 60 * s), 12 * s, 12 * s)
-    # ekran
+    # ekran 2,42"
     p.setBrush(QColor("#0b0f14"))
-    p.drawRoundedRect(QRectF(8 * s, 8 * s, 30 * s, 10 * s), 2 * s, 2 * s)
+    p.drawRoundedRect(QRectF(8 * s, 8 * s, 48 * s, 20 * s), 2.5 * s, 2.5 * s)
     p.setBrush(QColor("#4fc3f7"))
-    p.drawRect(QRectF(11 * s, 12 * s, 18 * s, 2 * s))
-    # pokrętło
-    p.setBrush(QColor("#9aa5b1"))
-    p.drawEllipse(QRectF(43 * s, 6 * s, 14 * s, 14 * s))
-    p.setBrush(QColor("#1f2933"))
-    p.drawRect(QRectF(49.2 * s, 7 * s, 1.6 * s, 5 * s))
-    # klawisze
-    colors = ["#f57c00", "#4fc3f7", "#66bb6a"]
-    for r in range(3):
-        for c in range(3):
-            p.setBrush(QColor(colors[(r + c) % 3]) if (r, c) == (0, 0) else QColor("#e4e7eb"))
+    p.drawRect(QRectF(12 * s, 12 * s, 28 * s, 3 * s))
+    p.drawRect(QRectF(12 * s, 19 * s, 18 * s, 3 * s))
+    # klawisze Choc: 2 rzędy po 4, niskie i szerokie
+    for r in range(2):
+        for c in range(4):
+            accent = (r, c) == (0, 0)
+            p.setBrush(QColor("#f57c00") if accent else QColor("#e4e7eb"))
             p.drawRoundedRect(
-                QRectF((9 + c * 16) * s, (24 + r * 12.5) * s, 13 * s, 10 * s), 2 * s, 2 * s
+                QRectF((8 + c * 12.4) * s, (34 + r * 12) * s, 10.4 * s, 9 * s), 1.6 * s, 1.6 * s
             )
     if status is not None:
         color = STATUS_COLORS.get(status, QColor("#95a5a6"))

@@ -153,10 +153,6 @@ class ProfileManager:
                 for binding in p.keys.values():
                     for action in binding.actions():
                         _rename_refs(action, old, new)
-                for gesture in ("rotate_cw", "rotate_ccw", "press_rotate_cw", "press_rotate_ccw"):
-                    enc_action = p.encoder.action_for(gesture)
-                    if enc_action is not None:
-                        _rename_refs(enc_action, old, new)
             if self.config.default_profile == old:
                 self.config.default_profile = new
             if self._active == old:

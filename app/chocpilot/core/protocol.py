@@ -16,11 +16,13 @@ PING_INTERVAL_S = 1.0
 HEARTBEAT_TIMEOUT_S = 3.0
 
 TITLE_CHARS = 21
-LABEL_CHARS = 7
-ENCODER_KEY = 10
-KEY_COUNT = 10
+LABEL_CHARS = 10  # na ekranie 1–2 wiersze po 6 znaków w komórce siatki
+# Matryca 2 × 4 (Kailh Choc): klawisze 1–4 w górnym rzędzie, 5–8 w dolnym.
+KEY_ROWS = 2
+KEY_COLS = 4
+KEY_COUNT = KEY_ROWS * KEY_COLS
 
-BOARD_NAMES = {"kb2040": "KB2040", "xiao_esp32s3": "XIAO ESP32-S3", "promicro": "Pro Micro"}
+BOARD_NAMES = {"promicro": "Pro Micro"}
 # Płytki z małą pamięcią zgłaszają w hello krótszy limit linii (max_line), np. Pro Micro: 272 B.
 MIN_LINE_LENGTH = 128
 
@@ -112,8 +114,8 @@ def msg_display_profile(name: str) -> dict[str, Any]:
 
 
 def msg_display_grid(title: str, labels: list[str]) -> dict[str, Any]:
-    padded = [fit(label, LABEL_CHARS) for label in labels[:9]]
-    padded += [""] * (9 - len(padded))
+    padded = [fit(label, LABEL_CHARS) for label in labels[:KEY_COUNT]]
+    padded += [""] * (KEY_COUNT - len(padded))
     return {"type": "display", "mode": "grid", "title": fit(title, TITLE_CHARS), "labels": padded}
 
 
@@ -153,8 +155,6 @@ SETTINGS_FIELDS = {
     "brightness": (int, 0, 255),
     "screensaver_s": (int, 0, 65535),
     "flip": (bool, None, None),
-    "enc_reverse": (bool, None, None),
-    "enc_pulses": (int, 1, 8),
     "debounce_ms": (int, 1, 50),
     "oled_addr": (int, 0x08, 0x77),
 }
@@ -182,9 +182,9 @@ def msg_settings(**values: Any) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class FallbackBinding:
-    """Skrót HID trybu awaryjnego. slot: 1..10 albo 'enc_cw' / 'enc_ccw'."""
+    """Skrót HID trybu awaryjnego. slot: klawisz 1..8."""
 
-    slot: int | str
+    slot: int
     mods: tuple[str, ...] = ()
     code: str | None = None
     media: str | None = None
@@ -252,7 +252,7 @@ class DeviceInfo:
     fw: str
     board: str
     keys: int = KEY_COUNT
-    encoder: bool = True
+    encoder: bool = False
     hid: bool = True
     # Diagnostyka I²C (firmware ≥ 1.0.1): has_diag=False – starszy firmware bez tych pól.
     has_diag: bool = False
@@ -284,12 +284,6 @@ class KeyEvent:
 
 
 @dataclass(frozen=True)
-class EncoderEvent:
-    steps: int
-    t: int
-
-
-@dataclass(frozen=True)
 class AckEvent:
     id: int
 
@@ -311,9 +305,7 @@ class TestModeEvent:
     active: bool
 
 
-DeviceMessage = (
-    DeviceInfo | KeyEvent | EncoderEvent | AckEvent | ErrorEvent | LogEvent | TestModeEvent
-)
+DeviceMessage = DeviceInfo | KeyEvent | AckEvent | ErrorEvent | LogEvent | TestModeEvent
 
 
 def _int(data: dict[str, Any], key: str, default: int | None = None) -> int:
@@ -348,7 +340,7 @@ def parse_device_message(data: dict[str, Any]) -> DeviceMessage | None:
             fw=str(data.get("fw", "?")),
             board=str(data.get("board", "?")),
             keys=_int(data, "keys", KEY_COUNT),
-            encoder=bool(data.get("encoder", True)),
+            encoder=bool(data.get("encoder", False)),
             hid=bool(data.get("hid", True)),
             has_diag="oled" in data,
             oled_addr=oled if isinstance(oled := data.get("oled"), int) else None,
@@ -368,8 +360,6 @@ def parse_device_message(data: dict[str, Any]) -> DeviceMessage | None:
         if action not in ("down", "up"):
             raise ProtocolError("bad key action")
         return KeyEvent(key=key, down=action == "down", t=_int(data, "t", 0))
-    if kind == "enc":
-        return EncoderEvent(steps=_int(data, "steps"), t=_int(data, "t", 0))
     if kind == "ack":
         return AckEvent(id=_int(data, "id"))
     if kind == "error":

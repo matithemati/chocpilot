@@ -54,19 +54,6 @@ class KeyBinding(Model):
         return [a for a in (self.tap, self.hold, self.double_tap) if a is not None]
 
 
-class EncoderBinding(Model):
-    rotate_cw: Action | None = None
-    rotate_ccw: Action | None = None
-    press_rotate_cw: Action | None = None
-    press_rotate_ccw: Action | None = None
-
-    def action_for(self, gesture: Gesture | str) -> ActionBase | None:
-        return getattr(self, str(gesture), None)
-
-    def set_action(self, gesture: Gesture | str, action: ActionBase | None) -> None:
-        setattr(self, str(gesture), action)
-
-
 def _empty_keys() -> dict[int, KeyBinding]:
     return {k: KeyBinding() for k in range(1, KEY_COUNT + 1)}
 
@@ -75,7 +62,6 @@ class Profile(Model):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     name: str = "Profil"
     keys: dict[int, KeyBinding] = Field(default_factory=_empty_keys)
-    encoder: EncoderBinding = Field(default_factory=lambda: EncoderBinding())
     processes: list[str] = Field(default_factory=list)  # automatyczne przełączanie
 
     @field_validator("keys")
@@ -93,13 +79,9 @@ class Profile(Model):
         return self.keys[number]
 
     def labels(self) -> list[str]:
-        return [self.keys[k].label for k in range(1, 10)]
+        return [self.keys[k].label for k in range(1, KEY_COUNT + 1)]
 
     def action_for(self, key: int | None, gesture: Gesture) -> ActionBase | None:
-        if gesture in (
-            Gesture.ROTATE_CW, Gesture.ROTATE_CCW, Gesture.PRESS_ROTATE_CW, Gesture.PRESS_ROTATE_CCW
-        ):  # fmt: skip
-            return self.encoder.action_for(gesture)
         if key is None:
             return None
         return self.keys[key].action_for(gesture)
@@ -117,8 +99,6 @@ class DeviceSettings(Model):
     screensaver_s: int = Field(300, ge=0, le=65535)
     display_mode: Literal["grid", "profile"] = "grid"
     flip: bool = False
-    enc_reverse: bool = False
-    enc_pulses: int = Field(4, ge=1, le=8)
     debounce_ms: int = Field(8, ge=1, le=50)
 
 
@@ -128,13 +108,7 @@ class GestureSettings(Model):
     hold_on_threshold: bool = False
 
 
-class EncoderSettings(Model):
-    accel_enabled: bool = False
-    accel_window_ms: int = Field(40, ge=5, le=500)
-    accel_multiplier: int = Field(3, ge=1, le=10)
-
-
-FallbackSlot = Literal["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "enc_cw", "enc_ccw"]
+FallbackSlot = Literal["1", "2", "3", "4", "5", "6", "7", "8"]
 
 
 class FallbackEntry(Model):
@@ -161,7 +135,6 @@ class AppSettings(Model):
 class Settings(Model):
     device: DeviceSettings = Field(default_factory=lambda: DeviceSettings())
     gestures: GestureSettings = Field(default_factory=lambda: GestureSettings())
-    encoder: EncoderSettings = Field(default_factory=lambda: EncoderSettings())
     fallback: FallbackSettings = Field(default_factory=lambda: FallbackSettings())
     app: AppSettings = Field(default_factory=lambda: AppSettings())
 
@@ -356,8 +329,6 @@ __all__ = [
     "Config",
     "ConfigStore",
     "DeviceSettings",
-    "EncoderBinding",
-    "EncoderSettings",
     "FallbackEntry",
     "FallbackSettings",
     "GestureSettings",

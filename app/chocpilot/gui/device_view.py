@@ -1,10 +1,8 @@
-"""Wizualny ChocPilot: ekran i pokrętło nad siatką 3×3. Podświetla fizyczne naciśnięcia na żywo."""
+"""Wizualny ChocPilot: ekran OLED nad siatką 2×4. Podświetla fizyczne naciśnięcia na żywo."""
 
 from __future__ import annotations
 
-import math
-
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -16,7 +14,7 @@ from PySide6.QtWidgets import (
 
 from ..core.actions import ActionBase
 from ..core.config import Profile
-from ..core.protocol import ENCODER_KEY
+from ..core.protocol import KEY_COLS, KEY_COUNT
 from . import theme
 from .i18n import action_summary, tr
 from .oled import OledView
@@ -151,93 +149,13 @@ class KeyTile(QWidget):
             )
 
 
-class KnobWidget(QWidget):
-    clicked = Signal()
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.angle = 0.0
-        self.pressed = False
-        self.selected = False
-        self.hovered = False
-        self.flash = 0.0
-        self.setFixedSize(116, 116)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(tr("Pokrętło (obrót, przycisk = klawisz 10)"))
-
-    def rotate(self, steps: int) -> None:
-        self.angle = (self.angle + steps * 18) % 360
-        self.flash = 1.0
-        self.update()
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-
-    def enterEvent(self, event: object) -> None:
-        self.hovered = True
-        self.update()
-
-    def leaveEvent(self, event: object) -> None:
-        self.hovered = False
-        self.update()
-
-    def paintEvent(self, event: QPaintEvent) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        c = QPointF(self.width() / 2, self.height() / 2)
-        r = min(self.width(), self.height()) / 2 - 6
-        active = self.pressed or self.flash > 0
-        if self.selected or active or self.hovered:
-            ring = (
-                theme.color("accent")
-                if active
-                else theme.color("text" if self.selected else "faint")
-            )
-            p.setPen(QPen(ring, 2 if (self.selected or active) else 1))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawEllipse(c, r + 3, r + 3)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(theme.color("knob_ring"))
-        p.drawEllipse(c, r, r)
-        tick = QPen(theme.color("knob_tick"), 2)
-        tick.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(tick)
-        for i in range(8):
-            a = math.radians(i * 45)
-            p.drawLine(
-                QPointF(c.x() + math.sin(a) * r * 0.82, c.y() - math.cos(a) * r * 0.82),
-                QPointF(c.x() + math.sin(a) * r * 0.94, c.y() - math.cos(a) * r * 0.94),
-            )
-        face = theme.color("knob_face")
-        if self.pressed:
-            face = face.darker(108)
-        p.setPen(QPen(theme.color("border"), 1))
-        p.setBrush(face)
-        p.drawEllipse(c, r * 0.7, r * 0.7)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(theme.color("knob_inner"))
-        p.drawEllipse(c, r * 0.55, r * 0.55)
-        a = math.radians(self.angle)
-        pointer = QPen(theme.color("text"), 4)
-        pointer.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pointer)
-        p.drawLine(
-            QPointF(c.x() + math.sin(a) * r * 0.25, c.y() - math.cos(a) * r * 0.25),
-            QPointF(c.x() + math.sin(a) * r * 0.6, c.y() - math.cos(a) * r * 0.6),
-        )
-
-
 class DeviceView(QWidget):
-    keySelected = Signal(int)  # 1..9
-    encoderSelected = Signal()
+    keySelected = Signal(int)  # 1..8
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.oled = OledView(scale=3)
+        self.oled = OledView(scale=2)
         self.oled.setStyleSheet("background: transparent; border: none;")
-        self.knob = KnobWidget()
-        self.knob.clicked.connect(self._select_encoder)
 
         self.mode_chip = label("", "chip")
         oled_head = QHBoxLayout()
@@ -249,35 +167,20 @@ class DeviceView(QWidget):
         of = QHBoxLayout(oled_frame)
         of.setContentsMargins(10, 10, 10, 10)
         of.addWidget(self.oled, 0, Qt.AlignmentFlag.AlignCenter)
-        oled_col = QVBoxLayout()
-        oled_col.setSpacing(8)
-        oled_col.addLayout(oled_head)
-        oled_col.addWidget(oled_frame, 0, Qt.AlignmentFlag.AlignLeft)
-        oled_col.addStretch(1)
+        top = QVBoxLayout()
+        top.setSpacing(8)
+        top.addLayout(oled_head)
+        top.addWidget(oled_frame, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.knob_title = label(tr("Pokrętło"), "strong")
-        self.knob_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.knob_summary = label("", "muted")
-        self.knob_summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        knob_col = QVBoxLayout()
-        knob_col.setSpacing(4)
-        knob_col.addWidget(self.knob, 0, Qt.AlignmentFlag.AlignHCenter)
-        knob_col.addWidget(self.knob_title)
-        knob_col.addWidget(self.knob_summary)
-
-        top = QHBoxLayout()
-        top.setSpacing(16)
-        top.addLayout(oled_col, 1)
-        top.addLayout(knob_col)
-
+        # Siatka 2 × 4 jak na płytce: K1–K4 u góry, K5–K8 na dole.
         grid = QGridLayout()
         grid.setSpacing(8)
         self.tiles: dict[int, KeyTile] = {}
-        for k in range(1, 10):
+        for k in range(1, KEY_COUNT + 1):
             tile = KeyTile(k)
             tile.clicked.connect(self._select_key)
             self.tiles[k] = tile
-            grid.addWidget(tile, (k - 1) // 3, (k - 1) % 3)
+            grid.addWidget(tile, (k - 1) // KEY_COLS, (k - 1) % KEY_COLS)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -295,7 +198,7 @@ class DeviceView(QWidget):
 
     def set_display_mode(self, mode: str) -> None:
         self.mode_chip.setText(
-            tr("Siatka etykiet 3×3") if mode == "grid" else tr("Duża nazwa profilu")
+            tr("Siatka etykiet 2×4") if mode == "grid" else tr("Duża nazwa profilu")
         )
 
     def set_profile(self, profile: Profile) -> None:
@@ -313,37 +216,21 @@ class DeviceView(QWidget):
             tile.set_binding(
                 binding.label, binding.color, gestures, action_summary(first) if first else ""
             )
-        enc = profile.encoder
-        parts = [action_summary(a) for a in (enc.rotate_ccw, enc.rotate_cw) if a is not None]
-        self.knob_summary.setText(" / ".join(parts))
-        self.knob.setToolTip(
-            f"{tr('Pokrętło – przycisk:')} {profile.keys[ENCODER_KEY].label or '—'}"
-        )
 
     def select(self, key: int | None) -> None:
-        """key 1..9, ENCODER_KEY (pokrętło) albo None."""
+        """key 1..8 albo None."""
         self._selected = key
         for k, tile in self.tiles.items():
             tile.selected = k == key
             tile.update()
-        self.knob.selected = key == ENCODER_KEY
-        self.knob.update()
 
     def _select_key(self, key: int) -> None:
         self.select(key)
         self.keySelected.emit(key)
 
-    def _select_encoder(self) -> None:
-        self.select(ENCODER_KEY)
-        self.encoderSelected.emit()
-
     # ------------------------------------------------------------------ podświetlanie na żywo
 
     def highlight_key(self, key: int, down: bool) -> None:
-        if key == ENCODER_KEY:
-            self.knob.pressed = down
-            self.knob.update()
-            return
         tile = self.tiles.get(key)
         if tile is None:
             return
@@ -352,10 +239,6 @@ class DeviceView(QWidget):
         if not down:
             self._fade.start()
 
-    def highlight_rotation(self, steps: int) -> None:
-        self.knob.rotate(steps)
-        self._fade.start()
-
     def _fade_step(self) -> None:
         active = False
         for tile in self.tiles.values():
@@ -363,9 +246,5 @@ class DeviceView(QWidget):
                 tile.pressed_flash = max(0.0, tile.pressed_flash - 0.08)
                 tile.update()
                 active = active or tile.pressed_flash > 0
-        if self.knob.flash > 0:
-            self.knob.flash = max(0.0, self.knob.flash - 0.08)
-            self.knob.update()
-            active = active or self.knob.flash > 0
         if not active:
             self._fade.stop()

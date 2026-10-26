@@ -118,50 +118,6 @@ def test_duplicate_events_are_ignored() -> None:
     assert kinds(events) == [(5, "tap")]
 
 
-def test_rotation() -> None:
-    engine, events = make_engine()
-    engine.rotate(2, 0)
-    engine.rotate(-1, 100)
-    engine.rotate(0, 200)
-    assert [(e.key, str(e.gesture), e.steps) for e in events] == [
-        (None, "rotate_cw", 2),
-        (None, "rotate_ccw", 1),
-    ]
-
-
-def test_press_rotate_suppresses_tap_and_hold() -> None:
-    engine, events = make_engine({10: {Gesture.TAP, Gesture.HOLD}})
-    engine.key_down(10, 0)
-    engine.rotate(1, 100)
-    engine.rotate(-2, 150)
-    engine.key_up(10, 900)  # długo, ale był obrót – brak hold/tap
-    assert [(e.key, str(e.gesture), e.steps) for e in events] == [
-        (10, "press_rotate_cw", 1),
-        (10, "press_rotate_ccw", 2),
-    ]
-    engine.key_down(10, 2000)
-    engine.key_up(10, 2050)
-    assert kinds(events)[-1] == (10, "tap")
-
-
-def test_press_rotate_cancels_hold_threshold() -> None:
-    engine, events = make_engine({10: {Gesture.HOLD}}, hold_on_threshold=True)
-    engine.key_down(10, 0)
-    engine.rotate(1, 100)
-    engine.tick(600)
-    engine.key_up(10, 700)
-    assert kinds(events) == [(10, "press_rotate_cw")]
-    assert engine.next_deadline() is None
-
-
-def test_acceleration() -> None:
-    engine, events = make_engine(accel_enabled=True, accel_window_ms=40, accel_multiplier=3)
-    engine.rotate(1, 0)  # pierwszy krok bez mnożnika
-    engine.rotate(1, 30)  # szybko → ×3
-    engine.rotate(1, 200)  # wolno → ×1
-    assert [e.steps for e in events] == [1, 3, 1]
-
-
 def test_reset_clears_state() -> None:
     engine, events = make_engine({1: {Gesture.TAP, Gesture.DOUBLE_TAP}})
     engine.key_down(1, 0)

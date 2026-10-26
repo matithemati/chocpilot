@@ -38,14 +38,13 @@ class Screen:
     key: int | None = None
     online: bool = False
     test_keys: tuple[bool, ...] = ()
-    test_steps: int = 0
     flip: bool = False
     brightness: int = 128
 
 
 @dataclass
 class SimulatedDevice:
-    board: str = "kb2040"
+    board: str = "promicro"
     clock: Callable[[], float] = time.monotonic
     emit: Callable[[dict[str, Any]], None] = lambda message: None
     settings: dict[str, Any] = field(
@@ -53,17 +52,16 @@ class SimulatedDevice:
             "brightness": 128,
             "screensaver_s": 300,
             "flip": False,
-            "enc_reverse": False,
-            "enc_pulses": 4,
             "debounce_ms": 8,
             "oled_addr": 0x3C,
         }
     )
     fallback: dict[str, dict[str, Any]] = field(
         default_factory=lambda: {
-            "10": {"media": "mute"},
-            "enc_cw": {"media": "vol_up"},
-            "enc_ccw": {"media": "vol_down"},
+            "5": {"media": "vol_down"},
+            "6": {"media": "vol_up"},
+            "7": {"media": "play_pause"},
+            "8": {"media": "mute"},
         }
     )
 
@@ -79,7 +77,6 @@ class SimulatedDevice:
         self._last_activity = self._start
         self._pressed = [False] * protocol.KEY_COUNT
         self._test_mode = False
-        self._test_steps = 0
         self.debug = False
         self.hid_log: list[str] = []  # co zostałoby wysłane przez HID w trybie offline
 
@@ -111,7 +108,6 @@ class SimulatedDevice:
                 return Screen(
                     kind="test",
                     test_keys=tuple(self._pressed),
-                    test_steps=self._test_steps,
                     flip=flip,
                     brightness=brightness,
                 )
@@ -142,20 +138,6 @@ class SimulatedDevice:
         self.emit({"type": "key", "key": key, "action": "down" if down else "up", "t": self._ms()})
         if offline and down:
             self._hid(str(key))
-
-    def rotate(self, steps: int) -> None:
-        if steps == 0:
-            return
-        with self._lock:
-            if self.settings["enc_reverse"]:
-                steps = -steps
-            self._last_activity = self.clock()
-            self._test_steps += steps
-            offline = not self.online
-        self.emit({"type": "enc", "steps": steps, "t": self._ms()})
-        if offline:
-            for _ in range(abs(steps)):
-                self._hid("enc_cw" if steps > 0 else "enc_ccw")
 
     def _hid(self, slot: str) -> None:
         binding = self.fallback.get(slot)
@@ -201,7 +183,7 @@ class SimulatedDevice:
             "fw": FW_VERSION,
             "board": self.board,
             "keys": protocol.KEY_COUNT,
-            "encoder": True,
+            "encoder": False,
             "hid": True,
             "online": self.online,
             "oled": 0x3C,
@@ -248,7 +230,6 @@ class SimulatedDevice:
         elif kind == "test_mode":
             with self._lock:
                 self._test_mode = bool(message.get("enable", True))
-                self._test_steps = 0
             self.emit({"type": "test", "active": self._test_mode})
         elif kind == "debug":
             self.debug = bool(message.get("enable", True))
@@ -263,9 +244,11 @@ class SimulatedDevice:
             screen = Screen(kind="profile", title=str(message.get("name", ""))[:21])
         elif mode == "grid":
             labels = message.get("labels", [])
-            if not isinstance(labels, list) or len(labels) > 9:
+            count = protocol.KEY_COUNT
+            if not isinstance(labels, list) or len(labels) > count:
                 raise ProtocolError("labels must be an array")
-            padded = [str(x or "")[:7] for x in labels] + [""] * (9 - len(labels))
+            padded = [str(x or "")[: protocol.LABEL_CHARS] for x in labels]
+            padded += [""] * (count - len(labels))
             screen = Screen(
                 kind="grid", title=str(message.get("title", ""))[:21], labels=tuple(padded)
             )
@@ -300,7 +283,7 @@ class SimulatedDevice:
         parsed: dict[str, dict[str, Any]] = {}
         for item in bindings:
             slot = str(item.get("key"))
-            if slot not in {str(i) for i in range(1, 11)} | {"enc_cw", "enc_ccw"}:
+            if slot not in {str(i) for i in range(1, protocol.KEY_COUNT + 1)}:
                 raise ProtocolError("unknown key")
             if item.get("media") and item.get("code"):
                 raise ProtocolError("use either code or media")

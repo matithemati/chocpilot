@@ -56,7 +56,7 @@ def run(
     minimized: bool = False,
     config_path: Path | None = None,
     verbose: bool = False,
-    board: str = "kb2040",
+    board: str = "promicro",
 ) -> int:
     QApplication.setApplicationName(APP_NAME)
     QApplication.setApplicationVersion(__version__)

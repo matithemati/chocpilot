@@ -28,10 +28,10 @@ def test_default_config_is_valid() -> None:
     assert config.default_profile == "Domyślny"
     profile = config.profile("Domyślny")
     assert profile is not None
-    assert len(profile.keys) == 10
+    assert len(profile.keys) == 8
     assert isinstance(profile.keys[1].tap, LaunchAction)
     assert profile.keys[1].tap.path == "calc.exe"
-    assert all(len(label) <= 7 for label in profile.labels())
+    assert all(len(label) <= 10 for label in profile.labels())
 
 
 def test_roundtrip_preserves_action_types() -> None:
@@ -66,7 +66,7 @@ def test_invalid_hotkey_rejected() -> None:
 
 def test_missing_keys_are_filled() -> None:
     profile = Profile.model_validate({"name": "X", "keys": {"3": {"label": "A"}}})
-    assert sorted(profile.keys) == list(range(1, 11))
+    assert sorted(profile.keys) == list(range(1, 9))
     assert profile.keys[3].label == "A"
 
 

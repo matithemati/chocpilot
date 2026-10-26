@@ -62,11 +62,11 @@ def test_shells() -> None:
 def test_default_profiles_per_os() -> None:
     win, win_stream = default_profiles("windows")
     assert win.keys[1].tap.path == "calc.exe"  # type: ignore[union-attr]
-    assert win.keys[5].tap.keys == "ctrl+c"  # type: ignore[union-attr]
+    assert win.keys[3].tap.keys == "ctrl+c"  # type: ignore[union-attr]
     assert win_stream.processes == ["obs64.exe"]
     mac, mac_stream = default_profiles("macos")
     assert mac.keys[1].tap.path.endswith("Calculator.app")  # type: ignore[union-attr]
-    assert mac.keys[5].tap.keys == "win+c"  # type: ignore[union-attr]
+    assert mac.keys[3].tap.keys == "win+c"  # type: ignore[union-attr]
     assert mac_stream.processes == ["OBS"]
 
 

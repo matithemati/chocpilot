@@ -1,4 +1,4 @@
-"""Ustawienia: urządzenie, gesty, pokrętło, tryb awaryjny, aplikacja.
+"""Ustawienia: urządzenie, gesty, tryb awaryjny, aplikacja.
 
 Klasa działa jako okno dialogowe albo – osadzona – jako strona okna głównego.
 """
@@ -29,20 +29,15 @@ from PySide6.QtWidgets import (
 from ..core import osinfo
 from ..core.actions import parse_hotkey
 from ..core.config import FallbackEntry, Settings
-from ..core.protocol import MEDIA_KEYS
+from ..core.protocol import KEY_COUNT, MEDIA_KEYS
 from .i18n import tr
 from .widgets import Segmented, Switch, button, frame, hline, label, styled
 
-FALLBACK_SLOTS = [(str(i), f"K{i}") for i in range(1, 10)] + [
-    ("10", "Przycisk pokrętła"),
-    ("enc_cw", "Pokrętło w prawo"),
-    ("enc_ccw", "Pokrętło w lewo"),
-]
+FALLBACK_SLOTS = [(str(i), f"K{i}") for i in range(1, KEY_COUNT + 1)]
 
 TABS = (
     ("device", "Urządzenie"),
     ("gestures", "Gesty"),
-    ("encoder", "Pokrętło"),
     ("fallback", "Tryb awaryjny"),
     ("app", "Aplikacja"),
 )
@@ -136,7 +131,7 @@ class SettingsDialog(QDialog):
         self.screensaver = _spin(0, 65535, d.screensaver_s, " s")
         self.screensaver.setSpecialValueText(tr("wyłączony"))
         self.display_mode = QComboBox()
-        self.display_mode.addItem(tr("Siatka etykiet 3×3"), "grid")
+        self.display_mode.addItem(tr("Siatka etykiet 2×4"), "grid")
         self.display_mode.addItem(tr("Duża nazwa profilu"), "profile")
         self.display_mode.setCurrentIndex(max(0, self.display_mode.findData(d.display_mode)))
         self.flip = Switch()
@@ -197,29 +192,6 @@ class SettingsDialog(QDialog):
             ]
         )
         gestures_page.layout().insertWidget(gestures_page.layout().count() - 1, note)
-
-        # --- pokrętło
-        e = settings.encoder
-        self.enc_reverse = Switch(tr("Odwróć kierunek obrotu"))
-        self.enc_reverse.setChecked(d.enc_reverse)
-        self.enc_pulses = _spin(1, 8, d.enc_pulses)
-        self.accel = Switch(tr("Przyspieszenie przy szybkim kręceniu"))
-        self.accel.setChecked(e.accel_enabled)
-        self.accel_window = _spin(5, 500, e.accel_window_ms, " ms")
-        self.accel_mult = _spin(1, 10, e.accel_multiplier, "×")
-        self.accel.toggled.connect(self.accel_window.setEnabled)
-        self.accel.toggled.connect(self.accel_mult.setEnabled)
-        self.accel_window.setEnabled(e.accel_enabled)
-        self.accel_mult.setEnabled(e.accel_enabled)
-        encoder_page = _page(
-            [
-                self._wrap(self.enc_reverse),
-                _row(tr("Impulsy na ząbek"), "1–8", self.enc_pulses),
-                self._wrap(self.accel),
-                _row(tr("Szybki obrót, gdy odstęp ≤"), "5–500 ms", self.accel_window),
-                _row(tr("Mnożnik kroków"), "1–10×", self.accel_mult),
-            ]
-        )
 
         # --- tryb awaryjny
         fb = settings.fallback
@@ -322,7 +294,7 @@ class SettingsDialog(QDialog):
         nav.addStretch(1)
         for key, page in zip(
             [k for k, _ in TABS],
-            [device_page, gestures_page, encoder_page, fall, app_page],
+            [device_page, gestures_page, fall, app_page],
             strict=True,
         ):
             scroll = QScrollArea()
@@ -345,9 +317,7 @@ class SettingsDialog(QDialog):
         titles.setSpacing(4)
         self.title = label(tr("Ustawienia"), "h1")
         titles.addWidget(self.title)
-        titles.addWidget(
-            label(tr("Urządzenie, gesty, pokrętło, tryb awaryjny i aplikacja."), "hint")
-        )
+        titles.addWidget(label(tr("Urządzenie, gesty, tryb awaryjny i aplikacja."), "hint"))
         head.addLayout(titles, 1)
         head.addWidget(self.cancel_button, 0, Qt.AlignmentFlag.AlignBottom)
         head.addWidget(self.save_button, 0, Qt.AlignmentFlag.AlignBottom)
@@ -434,17 +404,12 @@ class SettingsDialog(QDialog):
         d.display_mode = self.display_mode.currentData()
         d.flip = self.flip.isChecked()
         d.debounce_ms = self.debounce.value()
-        d.enc_reverse = self.enc_reverse.isChecked()
-        d.enc_pulses = self.enc_pulses.value()
         self.device_changed = d.model_dump() != before
         self.port_changed = d.port != old_port
 
         s.gestures.hold_ms = self.hold_ms.value()
         s.gestures.double_tap_ms = self.double_ms.value()
         s.gestures.hold_on_threshold = self.hold_threshold.isChecked()
-        s.encoder.accel_enabled = self.accel.isChecked()
-        s.encoder.accel_window_ms = self.accel_window.value()
-        s.encoder.accel_multiplier = self.accel_mult.value()
         s.fallback.from_profile = self.fallback_from_profile.isChecked()
         s.fallback.custom = entries
         s.app.autostart = self.autostart.isChecked()

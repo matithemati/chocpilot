@@ -34,7 +34,7 @@ class ActionHost(Protocol):
 class ActionContext:
     platform: PlatformBackend
     host: ActionHost
-    steps: int = 1  # liczba kroków (pokrętło); dla klawiszy 1
+    steps: int = 1  # liczba powtórzeń (dla klawiszy 1)
     key: int | None = None
     depth: int = 0  # zagnieżdżenie makr (ochrona przed rekurencją)
     extra: dict[str, Any] = field(default_factory=dict)
@@ -53,7 +53,7 @@ class ActionBase(BaseModel):
     # Metadane rejestru (ustawiane przez dekorator)
     label: ClassVar[str] = ""
     description: ClassVar[str] = ""
-    encoder_repeat: ClassVar[bool] = True  # przy pokrętle: powtarzaj run() dla każdego kroku
+    encoder_repeat: ClassVar[bool] = True  # przy steps > 1: powtarzaj run() dla każdego kroku
 
     def run(self, ctx: ActionContext) -> None:
         raise NotImplementedError
@@ -63,7 +63,7 @@ class ActionBase(BaseModel):
         return self.label or self.type
 
     def execute(self, ctx: ActionContext) -> None:
-        """Wykonuje akcję z uwzględnieniem liczby kroków pokrętła."""
+        """Wykonuje akcję z uwzględnieniem liczby powtórzeń."""
         if self.encoder_repeat and ctx.steps > 1:
             for _ in range(ctx.steps):
                 self.run(ctx)

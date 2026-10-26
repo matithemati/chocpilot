@@ -1,7 +1,7 @@
 """Okno główne: pasek boczny (nawigacja, profile, urządzenie) i strony
 Konfiguracja / Dziennik / Ustawienia.
 
-Konfiguracja: podgląd ChocPilot (ekran, pokrętło, klawisze) i panel edycji po prawej.
+Konfiguracja: podgląd ChocPilot (ekran, 8 klawiszy) i panel edycji po prawej.
 Zmiana języka przebudowuje interfejs (_build_ui) bez utraty stanu.
 """
 
@@ -39,14 +39,14 @@ from ..core.actions import ActionBase
 from ..core.config import Profile, duplicate_profile, export_profile, import_profile
 from ..core.engine import Controller
 from ..core.logbuffer import LogEntry
-from ..core.protocol import ENCODER_KEY, DeviceInfo
+from ..core.protocol import DeviceInfo
 from ..core.simulator import Screen
 from ..core.transport import list_all_ports
 from . import i18n, theme
 from .action_editor import EditorContext
 from .bridge import QtBridge
 from .device_view import DeviceView
-from .editors import EncoderEditor, KeyEditor, ProfileEditor
+from .editors import KeyEditor, ProfileEditor
 from .i18n import tr
 from .icons import STATUS_COLORS, app_icon, app_pixmap, dot_pixmap
 from .log_view import LogView
@@ -458,7 +458,7 @@ class MainWindow(QMainWindow):
         titles.addWidget(
             label(
                 tr(
-                    "Kliknij klawisz lub pokrętło, aby edytować akcje. "
+                    "Kliknij klawisz, aby edytować akcje. "
                     "Fizyczne naciśnięcia podświetlają elementy na żywo."
                 ),
                 "hint",
@@ -498,7 +498,6 @@ class MainWindow(QMainWindow):
         )
         self.device_view = DeviceView()
         self.device_view.keySelected.connect(self._select_key)
-        self.device_view.encoderSelected.connect(lambda: self._select_key(ENCODER_KEY))
         self.device_view.set_display_mode(self.config.settings.device.display_mode)
 
         self.profile_editor = ProfileEditor(self._running_processes)
@@ -510,11 +509,8 @@ class MainWindow(QMainWindow):
         self.key_editor = KeyEditor(context)
         self.key_editor.changed.connect(self._binding_edited)
         self.key_editor.closeRequested.connect(lambda: self._select_key(None))
-        self.encoder_editor = EncoderEditor(context)
-        self.encoder_editor.changed.connect(self._binding_edited)
-        self.encoder_editor.closeRequested.connect(lambda: self._select_key(None))
         self.stack = QStackedWidget()
-        for w in (self.profile_editor, self.key_editor, self.encoder_editor):
+        for w in (self.profile_editor, self.key_editor):
             self.stack.addWidget(w)
 
         card = frame("card")
@@ -656,9 +652,6 @@ class MainWindow(QMainWindow):
         if key is None:
             self.profile_editor.bind(profile)
             self.stack.setCurrentWidget(self.profile_editor)
-        elif key == ENCODER_KEY:
-            self.encoder_editor.bind(profile)
-            self.stack.setCurrentWidget(self.encoder_editor)
         else:
             self.key_editor.bind(key, profile.keys[key])
             self.stack.setCurrentWidget(self.key_editor)
@@ -776,7 +769,7 @@ class MainWindow(QMainWindow):
         self._apply_timer.start()
 
     def _test_action(self, action: ActionBase) -> None:
-        key = self.current_key if self.current_key and self.current_key != ENCODER_KEY else None
+        key = self.current_key or None
         self.controller.test_action(action, key)
 
     def _running_processes(self) -> list[str]:
@@ -833,7 +826,8 @@ class MainWindow(QMainWindow):
                 APP_NAME,
                 tr(
                     "Przełączyć urządzenie w tryb wgrywania firmware?\n"
-                    "KB2040 pojawi się jako dysk RPI-RP2, XIAO ESP32-S3 – jako port pobierania."
+                    "Pro Micro uruchomi bootloader Caterina na ok. 8 s (nowy port COM) – "
+                    "wtedy wgraj firmware: pio run -e promicro -t upload."
                 ),
             )
             if answer == QMessageBox.StandardButton.Yes:
@@ -844,8 +838,8 @@ class MainWindow(QMainWindow):
             self,
             f"{tr('O programie')} {APP_NAME}",
             f"<b>{APP_NAME}</b> {__version__}<br>"
-            + tr("Macropad 3×3 z pokrętłem i ekranem OLED.")
-            + "<br>Firmware: KB2040 (RP2040) / XIAO ESP32-S3.",
+            + tr('Macropad 2×4 (Kailh Choc) z ekranem OLED 2,42".')
+            + "<br>Firmware: Arduino Pro Micro (ATmega32U4).",
         )
 
     # ------------------------------------------------------------------ zdarzenia kontrolera
@@ -879,11 +873,8 @@ class MainWindow(QMainWindow):
             self.status_fw.setStyleSheet("font-size: 8.5pt;")
             self.status_fw.setToolTip("")
 
-    def _on_raw_input(self, key: int | None, down: bool, steps: int) -> None:
-        if key is None:
-            self.device_view.highlight_rotation(steps)
-        else:
-            self.device_view.highlight_key(key, down)
+    def _on_raw_input(self, key: int, down: bool) -> None:
+        self.device_view.highlight_key(key, down)
 
     def _on_profile_changed(self, profile: Profile, reason: str) -> None:
         if reason in ("manual", "auto", "auto-return") and not self.isActiveWindow():
