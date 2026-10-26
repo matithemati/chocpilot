@@ -8,7 +8,7 @@
 //     zakładamy montaż od spodu płytki (mcu_side) – nad nim leży moduł OLED,
 //   – J1: JST XH 4-pin pionowe, pod dolną krawędzią modułu OLED.
 // Ekran poziomo, przykręcony od spodu do podwyższonego „pokładu” obudowy i połączony przewodem
-// z J1. Wymiary modułu OLED 2,42" to nadal ZAŁOŻENIA – zmierz swój moduł.
+// z J1. Moduł OLED: ShengYang 2,42" (oled_variant) – rozstaw otworów i położenie szkła oszacowane.
 //
 // Współrzędne: (0, 0) = lewy dolny róg PCB; k2s() zamienia współrzędne KiCad (oś Y w dół).
 //
@@ -51,14 +51,22 @@ mcu_pocket_clear = 0.6;  // luz wokół części Pro Micro wystającej poza PCB
 /* [J1 – złącze OLED] */
 j1_clear = 14.0;     // wolne miejsce nad PCB przy J1: wtyk XH (ok. 10 mm) + zgięcie przewodów
 
-/* [OLED 2,42" SSD1309 – ZAŁOŻENIA, zmierz swój moduł] */
-oled_pcb      = [70.0, 43.0];
+/* [OLED 2,42" SSD1309 – moduł ShengYang (docs/img/oled_242_shengyang.png)] */
+// Warianty z karty sprzedawcy (wymiary płytki zwymiarowane, reszta – patrz uwagi):
+//   "i2c_4pin" – 70,10 × 48,10 mm, 4 piny I²C u góry (zwykle GND VCC SCL SDA – sprawdź nadruk)
+//                + złącze na dolnej krawędzi
+//   "spi_7pin" – 72,00 × 43,00 mm, 7 pinów z lewej (od pinu 1: GND VCC SCK SDA RES DC CS; I²C po
+//                zmianie rezystorów), starsza wersja 70,90 × 43,40 mm
+oled_variant  = "i2c_4pin";  // [i2c_4pin, spi_7pin]
+oled_pcb      = oled_variant == "spi_7pin" ? [72.0, 43.0] : [70.1, 48.1];
+// otwory Ø3 w narożnikach – rozstaw OSZACOWANY (ok. 3 mm od krawędzi), zmierz przed drukiem
+oled_holes    = oled_variant == "spi_7pin" ? [66.0, 37.0] : [64.1, 42.1];
 oled_pcb_t    = 1.6;
-oled_glass    = [60.5, 37.0, 2.0];  // szkło: szer., wys., grubość
+oled_glass    = [60.5, 37.0, 2.0];  // szkło panelu 2,42": szer., wys., grubość (typowe)
 oled_glass_d  = [0.0, 0.0];         // przesunięcie środka szkła od środka modułu
-oled_active   = [55.01, 27.49];     // obszar aktywny 128×64
+oled_active   = [55.01, 27.49];     // obszar aktywny 128×64 (typowy dla panelu 2,42")
 oled_active_d = [0.0, 0.0];         // przesunięcie obszaru aktywnego od środka szkła
-oled_holes    = [65.0, 38.0];       // rozstaw otworów montażowych (Ø3)
+oled_j1_gap   = 2.0;                // min. odstęp dolnej krawędzi modułu od J1 (przewody w górę)
 oled_back_clear = 8.0;              // od tyłu modułu do góry PCB (min.; patrz też j1_clear)
 oled_screw_pilot = 2.2;             // wkręt M2,5 wkręcany w słupek (do tworzyw)
 oled_boss_d   = 4.4;                // słupek mieści się między otworem a szkłem
@@ -117,7 +125,8 @@ pcb_holes = [for (h = holes_kicad) k2s(h)];
 mcu_box = box2s(mcu_kicad);
 usb_y   = k2s([0, usb_kicad_y])[1];
 j1_box  = box2s(j1_kicad);
-oled_c  = [keys_cx, gap_c];
+// moduł na środku szczeliny, chyba że nachodziłby na J1 – wtedy przesunięty w górę
+oled_c  = [keys_cx, max(gap_c, j1_box[1] + j1_box[3] + oled_j1_gap + oled_pcb[1] / 2)];
 
 inner = [pcb[0] + 2 * pcb_clear, pcb[1] + 2 * pcb_clear];  // wnętrze (od -pcb_clear)
 outer = [inner[0] + 2 * rim, inner[1] + 2 * rim];
@@ -153,6 +162,16 @@ usb_zc = pcb_bot - mcu_lift - mcu_t - usb_h / 2;
 mcu_pocket = [pcb[0], mcu_box[1] - mcu_pocket_clear,
               mcu_box[0] + mcu_box[2] - pcb[0] + mcu_pocket_clear, mcu_box[3] + 2 * mcu_pocket_clear];
 
+// kontrole: słupek OLED a szkło, moduł a wnętrze pokładu
+boss_glass_gap = min([for (h = oled_hole_pos) max(abs(h[0] - glass_c[0]) - oled_glass[0] / 2,
+                                                  abs(h[1] - glass_c[1]) - oled_glass[1] / 2)])
+                 - oled_boss_d / 2;
+deck_inner_y = [deck_y0 + top_t + deck_slope, deck_y1 - top_t - deck_slope];
+echo(str("OLED ", oled_variant, ": środek y ", oled_c[1], " (szczelina ", gap_c, "), moduł y ",
+         oled_c[1] - oled_pcb[1] / 2, "…", oled_c[1] + oled_pcb[1] / 2, ", wnętrze pokładu ",
+         deck_inner_y[0], "…", deck_inner_y[1], ", słupek–szkło ", boss_glass_gap, " mm"));
+assert(boss_glass_gap > 0, "słupek OLED nachodzi na szkło – zmniejsz oled_boss_d");
+assert(oled_c[1] + oled_pcb[1] / 2 <= deck_inner_y[1], "moduł OLED nie mieści się pod pokładem");
 echo(str("PCB ", pcb[0], " × ", pcb[1], " mm; obudowa ", outer[0], " × ", outer[1],
          " mm, wys. ", key_top, " / ", deck_top, " mm"));
 

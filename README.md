@@ -37,8 +37,9 @@ docs/       PROTOCOL.md, WIRING.md, schematic.png (schemat płytki)
 
 - 1× Arduino / SparkFun **Pro Micro** (ATmega32U4), 5 V/16 MHz albo 3,3 V/8 MHz
 - 8× przełącznik **Kailh Choc** (low profile) + nasadki Choc, 8× dioda 1N4148
-- 1× OLED **2,42" SSD1309 128×64 I²C** (adres 0x3C; wiele modułów 2,42" wychodzi z fabryki
-  ustawionych na SPI – trzeba przełożyć zworki/rezystory na I²C)
+- 1× OLED **2,42" SSD1309 128×64 I²C** – moduł ShengYang, najlepiej wersja **4-pinowa I²C**
+  (70,10 × 48,10 mm); wersja 7-pinowa (72 × 43 mm) wymaga przełożenia rezystorów z SPI na I²C.
+  Szczegóły i karta sprzedawcy: [docs/WIRING.md](docs/WIRING.md#oled-242-ssd1309-12864-ic-złącze-j1)
 - płytka ChocPilot (schemat: [docs/schematic.png](docs/schematic.png))
 
 ## Montaż
@@ -216,9 +217,11 @@ Części: `shell`, `bottom`; podgląd: `assembly`, `exploded`. Wysokość: 20 mm
 30 mm przy ekranie – pod pokładem musi zmieścić się wtyk XH w J1 z przewodami (`j1_clear` = 14 mm
 nad PCB). Z niższym złączem (np. przewody wlutowane) zmniejsz `j1_clear`, a pokład się obniży.
 
-**Przed drukiem zmierz moduł OLED** – jego wymiary to nadal założenia (płytka 70 × 43 mm,
-otwory Ø3 w rozstawie 65 × 38 mm, szkło 60,5 × 37 × 2 mm, obszar aktywny 55,01 × 27,49 mm,
-wszystko wyśrodkowane). Słupki mieszczą się tylko ok. 0,75 mm od szkła. Zakładany jest też
+**Moduł OLED:** ShengYang 2,42", wersja wybierana parametrem `oled_variant` – `i2c_4pin`
+(domyślnie, 70,10 × 48,10 mm) albo `spi_7pin` (72 × 43 mm). Wymiary płytek są z karty
+sprzedawcy, ale rozstaw otworów (ok. 3 mm od krawędzi) i położenie szkła są oszacowane –
+**zmierz moduł przed drukiem**. Słupki mieszczą się tylko 0,35–0,55 mm od szkła; plik
+sprawdza to (i zmieszczenie modułu pod pokładem) asercjami przy renderowaniu. Zakładany jest też
 montaż Pro Micro od spodu płytki (elementy w dół) – przy montażu od góry trzeba zmienić
 `standoff_h`, wycięcie USB i miejsce pod modułem.
 

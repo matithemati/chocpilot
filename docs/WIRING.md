@@ -52,6 +52,19 @@ Wolne: 0/1 (UART TX/RX), A0–A3, 10, 14, 15, 16.
 
 ## OLED 2,42" SSD1309 128×64 (I²C), złącze J1
 
+Używany moduł: **ShengYang 2,42" OLED** (karta sprzedawcy: [img/oled_242_shengyang.png](img/oled_242_shengyang.png)).
+Sprzedawca oferuje kilka wersji płytki – w obudowie wybiera się je parametrem `oled_variant`:
+
+| Wersja | Płytka modułu | Wyprowadzenia | `oled_variant` |
+|---|---|---|---|
+| I²C, 4 piny | 70,10 × 48,10 mm | 4 piny u góry (zwykle GND, VCC, SCL, SDA – sprawdź nadruk), złącze na dolnej krawędzi | `i2c_4pin` (domyślnie) |
+| SPI/I²C, 7 pinów | 72,00 × 43,00 mm (starsza: 70,90 × 43,40) | 7 pinów z lewej, od pinu 1: GND, VCC, SCK (=SCL), SDA, RES, DC, CS | `spi_7pin` |
+
+Wymiary płytek pochodzą z karty sprzedawcy. Otwory montażowe (Ø3, w narożnikach) nie są
+zwymiarowane – obudowa zakłada rozstaw ok. 3 mm od krawędzi (64,1 × 42,1 / 66,0 × 37,0 mm),
+a szkło panelu 60,5 × 37 × 2 mm z obszarem aktywnym 55,01 × 27,49 mm na środku płytki.
+**Zmierz moduł przed drukiem obudowy** (`oled_holes`, `oled_glass_d`, `oled_active_d`).
+
 | J1 | Sygnał | Pro Micro |
 |---|---|---|
 | 1 | GND | GND |
@@ -66,10 +79,12 @@ Wolne: 0/1 (UART TX/RX), A0–A3, 10, 14, 15, 16.
   sprawdza magistralę programowo z zamienionymi liniami i działa dalej w programowym I²C
   (`swapped` w `hello`, ostrzeżenie w dzienniku aplikacji). Działa, ale wolniej – lepiej
   dopasować kolejność na płytce.
-- **I²C zamiast SPI.** Wiele modułów 2,42" (7 pinów) jest fabrycznie ustawionych na SPI;
-  tryb I²C wybiera się zworkami/rezystorami na odwrocie – według opisu nadrukowanego na
-  module lub karty sprzedawcy (RES trzeba wtedy podciągnąć do VCC). Moduł 4-pinowy jest od razu
-  w I²C.
+- **I²C zamiast SPI.** Wersja 7-pinowa jest fabrycznie ustawiona na SPI; tryb I²C wybiera się
+  zworkami/rezystorami na odwrocie – według opisu nadrukowanego na module lub karty sprzedawcy
+  (RES trzeba wtedy podciągnąć do VCC). Wersja 4-pinowa jest od razu w I²C.
+- **Przewód do J1.** J1 (JST XH 4-pin) leży tuż pod dolną krawędzią modułu; obudowa przesuwa
+  moduł tak, by zostały ≥ 2 mm odstępu (wersja 4-pinowa: o 2,7 mm w górę od środka szczeliny).
+  Kolejność żył dopasuj do nadruku modułu – J1 ma GND, +5 V, SDA, SCL.
 - **Sterownik.** Firmware używa `u8x8_d_ssd1309_128x64_noname2` (najczęstsze moduły 2,42").
   Jeśli obraz jest przesunięty o 2 kolumny albo pojawiają się śmieci przy krawędzi, zmień na
   `noname0` w `firmware/src/mini_gfx.cpp`.
