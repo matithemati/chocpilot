@@ -1,0 +1,33 @@
+Poz.,Oznaczenia,Ilość,Opis,Obudowa,Footprint KiCad,Producent,Nr producenta,TME,Amazon (alternatywa),Montaż,Uwagi
+1,J1,1,"USB-C 2.0, wlutowane 16 padów SMD (raster 0,5) + 4 kołki THT",SMD 16P + THT,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,GCT,USB4105-GF-A,USB4105-GF-A,,SMD,
+2,F1,1,"Bezpiecznik polimerowy PTC 0,5 A (zadziałanie 1 A)",1206,Fuse:Fuse_1206_3216Metric_Pad1.42x1.75mm_HandSolder,Bourns,MF-NSMF050-2,MF-NSMF050-2,,SMD,
+3,"R1, R2",2,Rezystor 5.1kΩ 1% 0805,0805,Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,Yageo,RC0805FR-075K1L,RC0805FR-075K1,,SMD,
+4,U3,1,Ochrona ESD linii D+/D−,SOT-23-6,Package_TO_SOT_SMD:SOT-23-6_Handsoldering,STMicroelectronics,USBLC6-2SC6,USBLC6-2SC6,,SMD,
+5,U2,1,"LDO 3,3 V / 400 mA",SOT-23-5,Package_TO_SOT_SMD:SOT-23-5_HandSoldering,Texas Instruments,TPS73633DBVR,TPS73633DBVR,,SMD,
+6,"C1, C3, C15, C18",4,Kondensator 10µF X5R 0805,0805,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,Samsung,CL21A106KAYNNNE,CL21A106KAYNNNE,,SMD,
+7,"C2, C11",2,Kondensator 1µF X7R 0805,0805,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,Samsung,CL21B105KBFNNNE,CL21B105KBFNNNE,,SMD,nr TME do potwierdzenia
+8,C4,1,Kondensator 10nF X7R 0805,0805,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,Samsung,CL21B103KBANNNC,CL21B103KBANNNC,,SMD,nr TME do potwierdzenia
+9,U1,1,"MCU Cortex-M0 48 MHz, USB FS bez kwarcu, bootloader DFU w ROM","LQFP-48 0,5 mm",Package_QFP:LQFP-48_7x7mm_P0.5mm,STMicroelectronics,STM32F072CBT6,STM32F072CBT6,,SMD,
+10,"C5–C8, C10, C12, C16, C17, C19–C30",20,Kondensator 100nF X7R 0805,0805,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,Samsung,CL21B104KBCNNNC,CL21B104KBCNNNC,,SMD,
+11,C9,1,Kondensator 4.7µF X5R 0805,0805,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,Samsung,CL21A475KAQNNNE,CL21A475KAQNNNE,,SMD,
+12,Y1,1,"Kwarc 8 MHz, CL 18 pF (opcjonalny – USB działa z HSI48+CRS)",5032 2-pad,Crystal:Crystal_SMD_5032-2Pin_5.0x3.2mm_HandSoldering,Abracon,ABM3-8.000MHZ-D2Y-T,ABM3-8.000MHZ-D2Y,,SMD,opcjonalny – USB działa bez kwarcu
+13,"C13, C14",2,Kondensator 27pF C0G 0805,0805,Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder,Samsung,CL21C270JBANNNC,CL21C270JBANNNC,,SMD,nr TME do potwierdzenia
+14,R3,1,Rezystor 10kΩ 1% 0805,0805,Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,Yageo,RC0805FR-0710KL,RC0805FR-0710K,,SMD,nr TME do potwierdzenia
+15,SW1,1,Reset (od spodu płytki),SMD 6×6 mm,Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92,C&K,PTS645SM43SMTR92 LFS,PTS645SM43SMTR92,,SMD (spód),
+16,SW2,1,BOOT0 – wejście do bootloadera DFU (od spodu płytki),SMD 6×6 mm,Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92,C&K,PTS645SM43SMTR92 LFS,PTS645SM43SMTR92,,SMD (spód),
+17,J3,1,"SWD do debugowania (opcjonalne, pady bez listwy)","THT 2,54 mm",Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical,Connfly,DS1021-1*5SF11-B,ZL201-05G,,THT,DNP – opcjonalne; nr TME do potwierdzenia
+18,J2,1,"Złącze modułu OLED 2,42"": GND, VCC, SCL, SDA (jak nadruk modułu)","THT 2,54 mm gniazdo",Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical,Connfly,DS1023-1*4S21,ZL262-4SG,,THT,
+19,"R4, R5",2,Rezystor 4.7kΩ 1% 0805,0805,Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,Yageo,RC0805FR-074K7L,RC0805FR-074K7,,SMD,nr TME do potwierdzenia
+20,"ENC1, ENC2",2,Enkoder EC11 z przyciskiem (15 imp./30 zatrzasków),THT,Rotary_Encoder:RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm,ALPS,EC11E15244G1,EC11E15244G1,,THT,
+21,RV1,1,"Potencjometr suwakowy 45 mm, 10 kΩ (dół = GND, góra = 3,3 V)",THT,Potentiometer_THT:Potentiometer_Bourns_PTA4543_Single_Slide,Bourns,PTA4543-2015DPA103,PTA45432015DPA10-0,Bourns PTA4543-2015DPB103 (liniowy),THT,TME ma tylko charakterystykę log. (A) – firmware linearyzuje; liniowa B103 – Amazon
+22,U4,1,"Konwerter poziomu 3,3 V → 5 V dla linii danych LED",SOT-23-5,Package_TO_SOT_SMD:SOT-23-5_HandSoldering,Texas Instruments,SN74AHCT1G125DBVR,SN74AHCT1G125DBVR,,SMD,
+23,R6,1,Rezystor 330Ω 1% 0805,0805,Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder,Yageo,RC0805FR-07330RL,RC0805FR-07330R,,SMD,nr TME do potwierdzenia
+24,L1–L12,12,"LED adresowalny RGB, spód płytki (podświetlenie blatu)",5050 PLCC4,LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm,Worldsemi,WS2812B-V5,WS2812B-V5,WS2812B 5050 SMD chip (np. BTF-LIGHTING),SMD (spód),
+25,S1–S8,8,Gniazdo hotswap Kailh Choc (V1/V2),SMD,,Kailh,CPG135001S30,—,"amazon.de B0CJQHMYDW (50 szt., „Low Profile Socket … Kailh 1350”)",SMD (spód),brak w TME; lutowane od spodu na pady 1 i 2
+26,S1–S8,8,"Przełącznik Kailh Choc V2 (low profile, trzpień MX)",THT (wciskany),,Kailh,CPG1353 (Choc V2),—,amazon.de B0CMZWF635 (Kailh Choc V2 Brown) lub inny Choc V2,wciskany w gniazdo,brak w TME; pasują też Choc V1 (CPG1350)
+27,—,8,Keycap 1u w profilu MX (Choc V2 ma trzpień MX),—,,—,—,—,keycaps MX 1u (np. low profile),—,"raster 19,05 mm"
+28,"ENC1, ENC2",2,"Gałka do enkodera, oś 6 mm D, Ø ≤ 18 mm",—,,—,—,—,potentiometer knob 6 mm D shaft,—,oś D 6 mm
+29,RV1,1,Nakładka na dźwignię suwaka Bourns PTA,—,,—,—,—,slide potentiometer knob cap,—,wąska (≤ 8 mm) – patrz DESIGN_NOTES
+30,J2,1,"Moduł OLED 2,42"" SSD1309 128×64 I²C, 4 piny","70,10 × 48,10 mm",,ShengYang,—,—,2.42 inch OLED SSD1309 I2C 4 pin,na gniazdo J2,jak w ChocPilot v1
+31,J2,1,"Listwa kołkowa 1×4 2,54 mm do modułu (jeśli moduł jej nie ma)",THT,,Connfly,DS1021-1*4SF11,ZL201-04G,pin header 2.54 mm,THT,do potwierdzenia w TME
+32,H1–H4,4,Śruba M3 × 6 + tuleja dystansowa / wkładka do obudowy,—,,—,—,—,M3 screws assortment,—,zależnie od obudowy

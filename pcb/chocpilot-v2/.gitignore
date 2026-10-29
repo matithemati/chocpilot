@@ -1,0 +1,7 @@
+tools/build/
+__pycache__/
+*-backups/
+fp-info-cache
+*.kicad_prl
+#auto_saved_files#
+~*.lck

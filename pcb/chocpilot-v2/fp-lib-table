@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "chocpilot") (type "KiCad") (uri "${KIPRJMOD}/chocpilot.pretty") (options "") (descr "ChocPilot v2 – footprinty własne"))
+)
