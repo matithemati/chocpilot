@@ -53,6 +53,7 @@ LedSettings gLedLive;
 uint32_t gLastLedMs = 0;
 Rgb gLedFrame[board::kLedCount];
 bool gLedFrameValid = false;
+uint32_t gLedSentMs = 0;
 uint32_t gKeyDownAt[kTotalKeys] = {0};
 uint8_t gLedReact = 0;
 
@@ -139,9 +140,13 @@ void updateLeds(uint32_t now) {
   frame.keyLed = board::kKeyLed;
   Rgb next[board::kLedCount];
   gLedReact = renderLeds(gLedLive, frame, next, board::kLedCount);
-  if (gLedFrameValid && memcmp(next, gLedFrame, sizeof(next)) == 0) return;
+  // Ta sama klatka co ostatnio: bez wysyłania, ale co sekundę ponownie – zakłócenie linii
+  // danych (np. ESD) nie zostaje na diodach na stałe.
+  const bool same = gLedFrameValid && memcmp(next, gLedFrame, sizeof(next)) == 0;
+  if (same && now - gLedSentMs < 1000) return;
   memcpy(gLedFrame, next, sizeof(next));
   gLedFrameValid = true;
+  gLedSentMs = now;
   leds::show(gLedFrame, board::kLedCount);
 }
 

@@ -75,10 +75,17 @@ if (-not (Test-DfuDevice)) {
     Write-Host "Przełączam ChocPilot na $port w tryb DFU..."
     $serial = New-Object System.IO.Ports.SerialPort $port, 115200
     $serial.DtrEnable = $true
-    $serial.Open()
+    # Port bywa zwalniany przez zamkniętą aplikację jeszcze przez chwilę – kilka prób otwarcia.
+    for ($i = 0; -not $serial.IsOpen; $i++) {
+        try { $serial.Open() } catch {
+            if ($i -ge 10) { throw "Nie można otworzyć $port – port zajęty przez inny program?" }
+            Start-Sleep -Milliseconds 300
+        }
+    }
     $serial.Write("{`"type`":`"reboot`",`"bootloader`":true}`n")
     Start-Sleep -Milliseconds 200
-    $serial.Close()
+    # Płytka odłącza się od USB, skacząc do bootloadera – błąd zamykania znikniętego portu jest oczekiwany.
+    try { $serial.Close() } catch { }
     for ($i = 0; $i -lt 40 -and -not (Test-DfuDevice); $i++) { Start-Sleep -Milliseconds 250 }
     if (-not (Test-DfuDevice)) { throw "Płytka nie pojawiła się jako STM32 BOOTLOADER (0483:DF11)" }
 }

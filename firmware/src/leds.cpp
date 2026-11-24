@@ -50,8 +50,13 @@ void begin() {
 }
 
 void show(const Color* colors, uint8_t count) {
-  // Przerwania (USB, SysTick) mogą wydłużyć przerwę między bitami – WS2812B-V6 toleruje to
-  // aż do czasu resetu (≥ 280 µs), więc transmisja nie musi blokować przerwań.
+  // Transmisja bez przerwań: przerwa w strumieniu (np. obsługa USB przy serii komend) zostawia
+  // MOSI w stanie ostatniego bitu. Granica bajtu wypada też w środku kodu bitu WS2812 – gdy
+  // ostatni wysłany bit to 1, linia trwa w stanie wysokim i „0” zamienia się w „1” (kolory
+  // jaśnieją do białego / żółtego). 12 diod × 24 bity × 1 µs ≈ 0,3 ms – USB i SysTick to
+  // wytrzymują (sprzęt USB sam odpowiada NAK, przerwanie wykona się zaraz po transmisji).
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   for (uint8_t i = 0; i < count; ++i) {
     sendByte(colors[i].g);  // kolejność GRB
     sendByte(colors[i].r);
@@ -59,6 +64,7 @@ void show(const Color* colors, uint8_t count) {
   }
   while (SPI2->SR & SPI_SR_BSY) {
   }
+  __set_PRIMASK(primask);
 }
 
 void fill(Color color) {
