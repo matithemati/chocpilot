@@ -1,4 +1,4 @@
-"""Generuje chocpilot-v2.kicad_pcb z design.py (uruchamiać Pythonem KiCad – moduł pcbnew).
+"""Generuje chocpilot-v0.kicad_pcb z design.py (uruchamiać Pythonem KiCad – moduł pcbnew).
 
   python3(KiCad) gen_pcb.py            – rozmieszczenie, trasowanie (router.py), strefy GND
   python3(KiCad) gen_pcb.py --reuse    – jak wyżej, ale z zapisanych wyników trasowania
@@ -18,12 +18,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import design  # noqa: E402
 from gen_sch import uid  # noqa: E402
+from kicad_env import CLI, FPDIR, PYTHON  # noqa: E402
 from sexpr import find, find1, parse  # noqa: E402
 
 PRJ = os.path.normpath(os.path.join(HERE, '..'))
-OUT = os.path.join(PRJ, 'chocpilot-v2.kicad_pcb')
+OUT = os.path.join(PRJ, 'chocpilot-v0.kicad_pcb')
 WORK = os.path.join(HERE, 'build')
-STOCK = '/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints/'
 OX, OY = design.BOARD_ORIGIN
 MM = pcbnew.FromMM
 
@@ -36,20 +36,17 @@ def P(x, y):
 def lib_path(lib):
     if lib == 'chocpilot':
         return os.path.join(PRJ, 'chocpilot.pretty')
-    return STOCK + lib + '.pretty'
+    return FPDIR + lib + '.pretty'
 
 
 # ---------------------------------------------------------------- netlista ze schematu
-CLI = '/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli'
-
-
 def read_netlist():
     """Nazwy sieci i pola symboli dokładnie tak, jak widzi je KiCad (np. „/K1”)."""
-    path = os.path.join(WORK, 'chocpilot-v2.net')
+    path = os.path.join(WORK, 'chocpilot-v0.net')
     subprocess.check_call([CLI, 'sch', 'export', 'netlist', '--format', 'kicadsexpr', '-o', path,
-                           os.path.join(PRJ, 'chocpilot-v2.kicad_sch')],
+                           os.path.join(PRJ, 'chocpilot-v0.kicad_sch')],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    root = parse(open(path).read())
+    root = parse(open(path, encoding='utf-8').read())
     pin_net, fields = {}, {}
     for comp in find(find1(root, 'components'), 'comp'):
         ref = find1(comp, 'ref')[1]
@@ -126,7 +123,7 @@ def build_board(pin_net, fields):
         fp.SetValue(p['value'])
         fp.SetPath(pcbnew.KIID_PATH('/' + uid('sym', p['ref'])))
         fp.SetSheetname('/')
-        fp.SetSheetfile('chocpilot-v2.kicad_sch')
+        fp.SetSheetfile('chocpilot-v0.kicad_sch')
         x, y, rot, side = p['pcb']
         fp.SetPosition(P(x, y))
         board.Add(fp)                # Flip wymaga footprintu na płytce
@@ -167,18 +164,15 @@ def build_board(pin_net, fields):
             t.SetMirrored(True)
         board.Add(t)
 
-    text('ChocPilot v2', 34.0, 44.0, pcbnew.B_SilkS, 1.5, mirror=True)
-    text('rev 2.0  2026-10', 34.0, 46.5, pcbnew.B_SilkS, 1.0, mirror=True)
+    text('ChocPilot v0', 34.0, 44.0, pcbnew.B_SilkS, 1.5, mirror=True)
+    text('rev 0  2026-11', 34.0, 46.5, pcbnew.B_SilkS, 1.0, mirror=True)
     text('RESET', 46.0, 65.2, pcbnew.B_SilkS, 1.0, mirror=True)
     text('BOOT0', 58.0, 65.2, pcbnew.B_SilkS, 1.0, mirror=True)
-    j2 = design.XC - 3.81
-    for i, name in enumerate(['GND', 'VCC', 'SCL', 'SDA']):
-        text(name, j2 + i * 2.54, design.OLED_PIN_Y - 2.0, pcbnew.F_SilkS, 0.8)
+    jx, jy = design.LCD_HDR
+    for i, name in enumerate(['VCC', 'GND', 'DIN', 'CLK', 'CS', 'DC', 'RST', 'BL']):
+        text(name, jx + 2.6, jy + i * 2.54, pcbnew.F_SilkS, 0.8)
     for i, name in enumerate(['3V3', 'DIO', 'CLK', 'RST', 'GND']):
         text(name, 72.0 + i * 2.54, 60.3, pcbnew.F_SilkS, 0.8)
-    jp = [p for p in design.parts if p['ref'] == 'JP1'][0]['pcb']
-    text('3V3', jp[0] - 1.3, jp[1] - 1.6, pcbnew.F_SilkS, 0.8)
-    text('5V', jp[0] + 1.3, jp[1] - 1.6, pcbnew.F_SilkS, 0.8)
     place_refs(board, fps)
     return board, nets, fps
 
@@ -329,7 +323,7 @@ def export_geometry(board, fps, pre_tracks, alias):
                     pads.append(dict(ref=ref, num='', net=None, x=x, y=y, w=pcbnew.ToMM(bb.GetWidth()),
                                      h=pcbnew.ToMM(bb.GetHeight()), rot=0, shape='rect', layers=[L], drill=0))
     return dict(board=dict(w=design.BOARD_W, h=design.BOARD_H, corner=design.CORNER_R),
-                pads=pads, holes=holes, tracks=pre_tracks, vias=[], nets=route_order(alias), iterations=12,
+                pads=pads, holes=holes, tracks=pre_tracks, vias=[], nets=route_order(alias), iterations=40,
                 plane_nets=['GND'])
 
 
@@ -410,8 +404,14 @@ def add_zones(board, nets):
         z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
         z.SetAssignedPriority(0)
         board.Add(z)
-    filler = pcbnew.ZONE_FILLER(board)
-    filler.Fill(board.Zones())
+
+
+def fill_zones(path):
+    """Wypełnienie stref na płytce wczytanej z pliku – na Windows ZONE_FILLER na płytce
+    zbudowanej w pamięci (bez projektu) kończy się naruszeniem ochrony pamięci."""
+    board = pcbnew.LoadBoard(path)
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    pcbnew.SaveBoard(path, board, True)
 
 
 def main():
@@ -427,12 +427,14 @@ def main():
         routes = dict(tracks=[], vias=[], failed=[])
     else:
         if '--reuse' not in sys.argv or not os.path.exists(gout):
-            subprocess.check_call(['/usr/local/bin/python3', os.path.join(HERE, 'router.py'), gin, gout])
+            subprocess.check_call([PYTHON, os.path.join(HERE, 'router.py'), gin, gout])
         routes = json.load(open(gout))
     apply_routes(board, nets, routes, pre)
     if '--place-only' not in sys.argv:
         add_zones(board, nets)
     pcbnew.SaveBoard(OUT, board, True)
+    if '--place-only' not in sys.argv:
+        fill_zones(OUT)
     print('zapisano', OUT, '| nieudane połączenia:', len(routes['failed']))
 
 

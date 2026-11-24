@@ -115,6 +115,9 @@ class FakeHost:
     def show_bar(self, title: str, value: float) -> None:
         self.calls.append(("bar", title, round(value)))
 
+    def klipper_mode(self, mode: str) -> None:
+        self.calls.append(("klipper", mode))
+
     def show_text(self, line1: str, line2: str = "", ms: int = 1500) -> None:
         self.calls.append(("text", line1, line2))
 

@@ -521,6 +521,7 @@ def main():
             fails[n] = fails.get(n, 0) + 1
         base = [n['name'] for n in data['nets']]
         order = sorted(base, key=lambda n: (-fails.get(n, 0), base.index(n)))
+
     json.dump(best, open(dst, 'w'), indent=0)
     for f in best['failed']:
         print('  NIEUDANE', f)

@@ -1,18 +1,33 @@
 #include "protocol.h"
 
-#include <Arduino.h>
-
 #include "boards/board.h"
 #include "config.h"
+#include "hal/hal.h"
 
 namespace chocpilot {
 
-void Link::begin() { Serial.begin(115200); }
+void Link::begin() { hal::serialBegin(); }
 
 void Link::poll(LineHandler handler) {
-  int budget = 512;  // ogranicz pracę w jednym obiegu pętli
-  while (budget-- > 0 && Serial.available() > 0) {
-    const int c = Serial.read();
+#if defined(CHOCPILOT_BOARD_V0)
+  // Seria komend (np. ikony przy zmianie profilu, ok. 8 KB): gdy bufor CDC się opróżni, od razu
+  // obsługujemy USB (następny pakiet 64 B może już czekać) zamiast wracać do pętli. Odbiór i tak
+  // ogranicza tempo pakietów USB (ok. 1 na ramkę 1 ms) – ważniejsze jest, że ekran nie jest
+  // przerysowywany w trakcie serii (Display: kSettleMs).
+  int budget = 4096;
+#else
+  int budget = 512;  // Pro Micro: ogranicz pracę w jednym obiegu pętli (skan klawiszy)
+#endif
+  while (budget-- > 0) {
+    if (hal::serialAvailable() <= 0) {
+#if defined(CHOCPILOT_BOARD_V0)
+      hal::poll();
+      if (hal::serialAvailable() <= 0) break;
+#else
+      break;
+#endif
+    }
+    const int c = hal::serialRead();
     if (c < 0) break;
     if (c == '\r') continue;
     if (c == '\n') {
@@ -38,32 +53,44 @@ void Link::poll(LineHandler handler) {
 
 void Link::sendRaw(size_t len) {
   if (len == 0) return;
-  // Rdzeń AVR: operator bool() czeka 10 ms, a availableForWrite() podaje tylko wolne miejsce
-  // w 64-bajtowym buforze końcówki USB. Bez otwartego portu (DTR) wiadomość jest pomijana.
-  if (!Serial.dtr()) return;
-  Serial.write(reinterpret_cast<const uint8_t*>(tx_), len);
-  Serial.write('\n');
+  // Bez otwartego portu (DTR) wiadomość jest pomijana.
+  if (!hal::serialConnected()) return;
+  tx_[len] = '\n';  // builder dostaje bufor o 1 bajt krótszy – jest miejsce na koniec linii
+  hal::serialWrite(reinterpret_cast<const uint8_t*>(tx_), len + 1);
 }
 
 void Link::sendHello(bool online) {
-  sendRaw(buildHello(tx_, sizeof(tx_), board::kBoardId, CHOCPILOT_FW_VERSION, online, diag));
+  sendRaw(buildHello(tx_, kTxCap, board::kBoardId, CHOCPILOT_FW_VERSION, online, diag,
+                     board::kHasEncoders, board::kLedCount, savers, saverCount, iconSize));
 }
 
 void Link::sendKey(uint8_t key, bool down, uint32_t t) {
-  sendRaw(buildKey(tx_, sizeof(tx_), key, down, t));
+  sendRaw(buildKey(tx_, kTxCap, key, down, t));
 }
 
-void Link::sendAck(int32_t id) { sendRaw(buildAck(tx_, sizeof(tx_), id)); }
+void Link::sendAck(int32_t id) { sendRaw(buildAck(tx_, kTxCap, id)); }
 
 void Link::sendError(bool hasId, int32_t id, FlashText msg) {
-  sendRaw(buildError(tx_, sizeof(tx_), hasId, id, msg));
+  sendRaw(buildError(tx_, kTxCap, hasId, id, msg));
 }
 
 void Link::sendLog(FlashText level, FlashText msg) {
   if (!debug) return;
-  sendRaw(buildLog(tx_, sizeof(tx_), level, msg));
+  sendRaw(buildLog(tx_, kTxCap, level, msg));
 }
 
-void Link::sendTest(bool active) { sendRaw(buildTest(tx_, sizeof(tx_), active)); }
+void Link::sendTest(bool active) { sendRaw(buildTest(tx_, kTxCap, active)); }
+
+void Link::sendEncoder(uint8_t index, int16_t delta, uint32_t t) {
+  sendRaw(buildEncoder(tx_, kTxCap, index, delta, t));
+}
+
+void Link::sendEncoderKey(uint8_t index, bool down, uint32_t t) {
+  sendRaw(buildEncoderKey(tx_, kTxCap, index, down, t));
+}
+
+void Link::sendSlider(uint8_t value, uint32_t t) {
+  sendRaw(buildSlider(tx_, kTxCap, value, t));
+}
 
 }  // namespace chocpilot

@@ -1,4 +1,4 @@
-# ChocPilot v2 – mapa pinów
+# ChocPilot v0 – mapa pinów
 
 Źródło prawdy: `tools/design.py` (schemat i płytka są z niego generowane). Współrzędne
 w mm od lewego górnego rogu płytki (widok od góry).
@@ -17,71 +17,91 @@ w mm od lewego górnego rogu płytki (widok od góry).
 | 11 | PA1 | ENC1_B | TIM2_CH2 (AF2) |
 | 12 | PA2 | ENC1_SW | przycisk enkodera 1 |
 | 13 | PA3 | ENC2_SW | przycisk enkodera 2 |
-| 14 | PA4 | K5 | klawisz S5 |
-| 15 | PA5 | K6 | klawisz S6 |
+| 14 | PA4 | COL2 | kolumna matrycy: K5, K6 |
+| 15 | PA5 | – | wolne |
 | 16 | PA6 | ENC2_A | TIM3_CH1 (AF1) – tryb enkodera |
 | 17 | PA7 | ENC2_B | TIM3_CH2 (AF1) |
-| 18 | PB0 | – | wolne (ADC_IN8) |
+| 18 | PB0 | ROW0 | wiersz matrycy: K2, K3, K6, K7 (diody D2, D3, D6, D7) |
 | 19 | PB1 | SLIDER | ADC_IN9, filtr C16 100 nF |
-| 20 | PB2 | K7 | klawisz S7 |
-| 21 | PB10 | K8 | klawisz S8 |
-| 22 | PB11 | – | wolne |
+| 20 | PB2 | COL3 | kolumna matrycy: K7, K8 |
+| 21 | PB10 | – | wolne |
+| 22 | PB11 | ROW1 | wiersz matrycy: K1, K4, K5, K8 (diody D1, D4, D5, D8) |
 | 23 / 24 | VSS / VDD | GND / +3V3 | C6 100 nF |
-| 25–27 | PB12–PB14 | – | wolne |
+| 25, 26 | PB12, PB13 | – | wolne |
+| 27 | PB14 | LCD_RST | reset ekranu, J2.7 |
 | 28 | PB15 | LED_DATA_3V3 | SPI2_MOSI (AF0) lub TIM15_CH2 (AF1) → U4 → L1 |
-| 29–31 | PA8–PA10 | – | wolne (PA9/PA10 = USART1, używany też przez bootloader) |
+| 29 | PA8 | LCD_BL | podświetlenie ekranu, PWM TIM1_CH1 (AF2), J2.8 |
+| 30 | PA9 | LCD_DC | dane/komenda ekranu, J2.6 |
+| 31 | PA10 | LCD_CS | wybór ekranu, J2.5 |
 | 32 | PA11 | USB_DN | USB D− (przez U3) |
 | 33 | PA12 | USB_DP | USB D+ (przez U3); podciąganie 1,5 k wewnątrz MCU |
 | 34 | PA13 | SWDIO | J3.2 |
 | 35 / 36 | VSS / VDDIO2 | GND / +3V3 | C7 100 nF |
 | 37 | PA14 | SWCLK | J3.3 |
-| 38, 39 | PA15, PB3 | – | wolne |
-| 40 | PB4 | K4 | klawisz S4 |
-| 41 | PB5 | K3 | klawisz S3 |
-| 42 | PB6 | OLED_SCL | I2C1_SCL (AF1), R4 4,7 k → 3V3 |
-| 43 | PB7 | OLED_SDA | I2C1_SDA (AF1), R5 4,7 k → 3V3 |
+| 38 | PA15 | – | wolne |
+| 39 | PB3 | LCD_SCK | SPI1_SCK (AF0), J2.4 |
+| 40 | PB4 | – | wolne |
+| 41 | PB5 | LCD_MOSI | SPI1_MOSI (AF0), J2.3 (DIN) |
+| 42 | PB6 | – | wolne |
+| 43 | PB7 | COL1 | kolumna matrycy: K3, K4 |
 | 44 | BOOT0 | BOOT0 | R3 10 k → GND, SW2 BOOT0 → 3V3 |
-| 45 | PB8 | K2 | klawisz S2 |
-| 46 | PB9 | K1 | klawisz S1 |
+| 45 | PB8 | – | wolne |
+| 46 | PB9 | COL0 | kolumna matrycy: K1, K2 |
 | 47 / 48 | VSS / VDD | GND / +3V3 | C5 100 nF, C9 4,7 µF |
 
-Wszystkie wejścia klawiszy, enkoderów i przycisków: **aktywne niskim, z wewnętrznym
-podciąganiem** (INPUT_PULLUP). Brak matrycy i diod – każdy klawisz ma własny pin.
-PB6/PB7 są tolerancyjne na 5 V (FT), więc moduł OLED może podciągać I²C do swojego VCC.
+Wejścia enkoderów, przycisków i kolumn matrycy: **aktywne niskim, z wewnętrznym
+podciąganiem** (INPUT_PULLUP). Klawisze – matryca 2×4 z diodą przy każdym (niżej).
 
-## Klawisze (Kailh Choc V2, gniazda hotswap)
+## Klawisze (Kailh Choc V2, lutowane THT)
 
-| Klawisz | Oznaczenie | Pin MCU | Środek (x, y) |
-|---|---|---|---|
-| K1 | S1 | PB9 | 26,43; 12,5 |
-| K2 | S2 | PB8 | 45,48; 12,5 |
-| K3 | S3 | PB5 | 64,53; 12,5 |
-| K4 | S4 | PB4 | 83,58; 12,5 |
-| K5 | S5 | PA4 | 26,43; 80,5 |
-| K6 | S6 | PA5 | 45,48; 80,5 |
-| K7 | S7 | PB2 | 64,53; 80,5 |
-| K8 | S8 | PB10 | 83,58; 80,5 |
+Matryca 2×4 **COL2ROW**, jak w v1 (`firmware/src/matrix.cpp`): wiersz (wyjście) ustawiany
+na 0, kolumny (wejścia z podciąganiem) czytane; prąd płynie kolumna → przełącznik → dioda →
+wiersz. Dioda 1N4148W (SOD-123) przy każdym klawiszu, na spodzie obok przełącznika, **katoda
+(pasek) od strony wiersza**. Dzięki diodom dowolna kombinacja klawiszy bez „duchów” (NKRO).
+
+Kolumna = para sąsiednich klawiszy w jednym rzędzie, wiersz 0 = klawisze wewnętrzne,
+wiersz 1 = zewnętrzne – dzięki temu przez środek płytki (pod MCU) idą tylko dwie sieci.
+Firmware potrzebuje tablicy (wiersz, kolumna) → Kn:
+
+| | COL0 (PB9) | COL1 (PB7) | COL2 (PA4) | COL3 (PB2) |
+|---|---|---|---|---|
+| **ROW0 (PB0)** | K2 | K3 | K6 | K7 |
+| **ROW1 (PB11)** | K1 | K4 | K5 | K8 |
+
+| Klawisz | Przełącznik | Dioda | Wiersz / kolumna | Środek (x, y) |
+|---|---|---|---|---|
+| K1 | S1 | D1 | ROW1 / COL0 | 26,43; 12,5 |
+| K2 | S2 | D2 | ROW0 / COL0 | 45,48; 12,5 |
+| K3 | S3 | D3 | ROW0 / COL1 | 64,53; 12,5 |
+| K4 | S4 | D4 | ROW1 / COL1 | 83,58; 12,5 |
+| K5 | S5 | D5 | ROW1 / COL2 | 26,43; 80,5 |
+| K6 | S6 | D6 | ROW0 / COL2 | 45,48; 80,5 |
+| K7 | S7 | D7 | ROW0 / COL3 | 64,53; 80,5 |
+| K8 | S8 | D8 | ROW1 / COL3 | 83,58; 80,5 |
 
 Raster 19,05 mm, rzędy 68 mm od siebie, ekran dokładnie pośrodku (55; 46,5). Numeracja
-`Kn` jak w v1 (firmware, protokół, aplikacja). Pad 1 gniazda = sygnał, pad 2 = GND.
+`Kn` jak w v1 (firmware, protokół, aplikacja). Pin 1 przełącznika = kolumna, pin 2 = anoda diody.
 
 ## Złącza
 
-**J1 – USB-C (GCT USB4105-GF-A)**, górna krawędź, oś x = 103,5. CC1/CC2 → 5,1 kΩ do GND
+**J1 – USB-C (GCT USB4105-GF-A)**, górna krawędź, oś x = 107,5, przód gniazda wystaje 1,2 mm poza płytkę. CC1/CC2 → 5,1 kΩ do GND
 (urządzenie, do 500 mA z dowolnego hosta USB-C). VBUS → bezpiecznik F1 0,5 A → +5V.
 
-**J2 – moduł OLED 2,42" I²C** (gniazdo 1×4 2,54 mm, pin 1 z lewej, środek złącza
-x = 55, y = 24,45 – pod pinami u góry modułu):
+**J2 – ekran LCD 2" SPI** (Waveshare 2inch LCD Module, TME WSH-17344: ST7789V, 240×320 IPS,
+moduł 58 × 35 mm). Listwa kołkowa 1×8 2,54 mm na prawo od MCU (pin 1 u góry, x = 86,5,
+y = 37,6). Ekran jest przykręcony do obudowy i połączony dołączonym kablem PH2.0 → żeńskie
+wtyki; kolejność na J2 = kolejność kabla, więc wtyki idą 1:1 (VCC na pin 1):
 
-| J2 | Sygnał | Uwagi |
-|---|---|---|
-| 1 | GND | |
-| 2 | OLED_VCC | zworka JP1: 1–2 = 3,3 V (fabrycznie), 2–3 = 5 V |
-| 3 | OLED_SCL | PB6 |
-| 4 | OLED_SDA | PB7 |
-
-Kolejność GND, VCC, SCL, SDA odpowiada typowemu nadrukowi modułów 2,42" – **sprawdź swój
-moduł**. Jeśli ma inną kolejność lub raster, połącz go przewodami (jak w v1).
+| J2 | Opis | Pin MCU | Uwagi |
+|---|---|---|---|
+| 1 | VCC | +3V3 | **tylko 3,3 V** – logika modułu = VCC; C15 10 µF przy złączu |
+| 2 | GND | GND | |
+| 3 | DIN | PB5 | SPI1_MOSI |
+| 4 | CLK | PB3 | SPI1_SCK, do 24 MHz |
+| 5 | CS | PA10 | |
+| 6 | DC | PA9 | |
+| 7 | RST | PB14 | |
+| 8 | BL | PA8 | podświetlenie, PWM TIM1_CH1 |
 
 **J3 – SWD (opcjonalne, 1×5 2,54 mm):** 1 = +3V3, 2 = SWDIO, 3 = SWCLK, 4 = NRST, 5 = GND
 (opisane na sitodruku). Do ST-Link / programatora SWD; zwykłe wgrywanie idzie przez USB DFU.
@@ -94,7 +114,7 @@ moduł**. Jeśli ma inną kolejność lub raster, połącz go przewodami (jak w 
 | | S1, S2 | PA2, GND |
 | ENC2 (oś 12,5; 58,5) | A, B, C | PA6, PA7, GND |
 | | S1, S2 | PA3, GND |
-| RV1 suwak (oś x = 97,25, środek skoku y = 46,5) | 1 (dół) | GND |
+| RV1 suwak (oś x = 101,25, środek skoku y = 46,5) | 1 (dół) | GND |
 | | 2 (suwak) | PB1 (ADC) |
 | | 3 (góra) | +3V3 – suwak w górę = większa wartość |
 
@@ -107,8 +127,8 @@ Kolejność w łańcuchu (widok od góry):
 
 | LED | Położenie | LED | Położenie |
 |---|---|---|---|
-| L1 | prawy bok, góra (104,5; 28) | L7 | lewy bok, dół (6; 72) |
-| L2 | prawy bok, dół (104,5; 65) | L8 | lewy bok, góra (6; 21) |
+| L1 | prawy bok, góra (108,5; 28) | L7 | lewy bok, dół (6; 72) |
+| L2 | prawy bok, dół (108,5; 65) | L8 | lewy bok, góra (6; 21) |
 | L3–L6 | dolna krawędź, od prawej (pod K8…K5) | L9–L12 | górna krawędź, od lewej (nad K1…K4) |
 
 Zasilanie +5V (z USB po bezpieczniku), 100 nF przy każdej diodzie, C18 10 µF na wejściu

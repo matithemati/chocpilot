@@ -16,6 +16,8 @@ class Fallback {
   bool enabled() const { return enabled_; }
 
   void onKey(uint8_t key, bool down);
+  // Krótkie naciśnięcie klawisza multimedialnego (np. pokrętło offline: głośność ±).
+  void tapMedia(uint16_t usage);
   // Wysyła zakolejkowane raporty, gdy HID jest gotowy (jeden raport na wywołanie).
   void update();
 

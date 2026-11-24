@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <string.h>
 
+#include "boards/board.h"
 #include "config.h"
 #include "device_config.h"
 #include "display.h"
@@ -13,6 +14,14 @@
 #include "protocol_codec.h"
 #include "settings.h"
 #include "time_util.h"
+#include "wall_clock.h"
+
+#if defined(CHOCPILOT_BOARD_V0)
+#include "controls.h"
+#include "hid_codes.h"
+#include "led_effects.h"
+#include "leds.h"
+#endif
 
 using namespace chocpilot;
 
@@ -25,6 +34,10 @@ Display gDisplay;
 Link gLink;
 Fallback gFallback(gConfig.fallback);
 Command gCommand;
+WallClock gClock;  // czas z aplikacji (komenda time) – zegar na wygaszaczu LCD
+#if defined(CHOCPILOT_BOARD_V0)
+IconStore gIcons;  // ikony klawiszy z aplikacji (komenda icon)
+#endif
 
 bool gOnline = false;
 uint32_t gLastRx = 0;
@@ -37,11 +50,32 @@ TestSnapshot gTest;
 uint32_t gComboSince = 0;  // od kiedy trzymane K1+K4 (0 = nie)
 bool gComboFired = false;
 
-void applySettings() { gDisplay.applySettings(gConfig.settings); }
+#if defined(CHOCPILOT_BOARD_V0)
+Controls gControls;
+// Podświetlenie: gConfig.leds = zapisane ustawienia, gLedLive = stosowane teraz (może mieć kolor
+// profilu wysłany z save:false – po rozłączeniu wraca do zapisanych).
+LedSettings gLedLive;
+uint32_t gLastLedMs = 0;
+Rgb gLedFrame[board::kLedCount];
+bool gLedFrameValid = false;
+uint32_t gKeyDownAt[kTotalKeys] = {0};
+uint8_t gLedReact = 0;
+#endif
+
+void applySettings() {
+  gDisplay.applySettings(gConfig.settings);
+#if defined(CHOCPILOT_BOARD_V0)
+  gDisplay.setSaver(gConfig.saver.name);
+#endif
+}
 
 void setTestMode(bool active) {
   if (gTestMode == active) return;
   gTestMode = active;
+  if (active) {
+    gTest.encoders[0] = 0;
+    gTest.encoders[1] = 0;
+  }
   gDisplay.setTestMode(active);
   gLink.sendTest(active);
 }
@@ -51,6 +85,9 @@ void setOnline(bool online) {
   gOnline = online;
   gFallback.setEnabled(!online);
   gDisplay.setOnline(online);
+#if defined(CHOCPILOT_BOARD_V0)
+  if (!online) gLedLive = gConfig.leds;  // kolor profilu tylko przy działającej aplikacji
+#endif
   gLink.sendLog(CHOCPILOT_F("info"), online ? CHOCPILOT_F("online") : CHOCPILOT_F("offline"));
 }
 
@@ -63,8 +100,64 @@ void onKeyChange(uint8_t key, bool down) {
   gLink.sendKey(key, down, now);
   gFallback.onKey(key, down);
   gTest.keys[key - 1] = down;
+#if defined(CHOCPILOT_BOARD_V0)
+  if (down) {
+    gKeyDownAt[key - 1] = now;
+    gLedReact = static_cast<uint8_t>(gLedReact | (1u << (key - 1)));
+  }
+#endif
   onUserActivity(now);
 }
+
+#if defined(CHOCPILOT_BOARD_V0)
+// Pokrętła i suwak: zdarzenia zawsze do aplikacji; offline pokrętło 1 = głośność ± i wyciszenie.
+void onEncoder(uint8_t index, int16_t delta) {
+  const uint32_t now = millis();
+  gLink.sendEncoder(index, delta, now);
+  if (index == 1) {
+    const uint16_t usage = delta > 0 ? kConsumerVolUp : kConsumerVolDown;
+    for (int16_t i = delta > 0 ? delta : -delta; i > 0; --i) gFallback.tapMedia(usage);
+  }
+  gTest.encoders[index - 1] = static_cast<int16_t>(gTest.encoders[index - 1] + delta);
+  onUserActivity(now);
+}
+
+void onEncoderKey(uint8_t index, bool down) {
+  const uint32_t now = millis();
+  gLink.sendEncoderKey(index, down, now);
+  if (index == 1 && down) gFallback.tapMedia(kConsumerMute);
+  gTest.encoderKeys[index - 1] = down;
+  onUserActivity(now);
+}
+
+void onSlider(uint8_t value) {
+  const uint32_t now = millis();
+  gLink.sendSlider(value, now);
+  gTest.slider = value;
+  onUserActivity(now);
+}
+
+// Podświetlenie blatu – efekt z ustawień leds (led_effects.cpp), co 20 ms; do diod idzie tylko
+// zmieniona klatka. Wygaszacz ekranu gasi też diody, tryb testu pokazuje kolejno R, G, B, biały.
+void updateLeds(uint32_t now) {
+  if (now - gLastLedMs < 20) return;
+  gLastLedMs = now;
+  LedFrame frame;
+  frame.now = now;
+  frame.online = gOnline;
+  frame.sleeping = gDisplay.sleeping();
+  frame.test = gTestMode;
+  frame.reactMask = gLedReact;
+  frame.keyDownAt = gKeyDownAt;
+  frame.keyLed = board::kKeyLed;
+  Rgb next[board::kLedCount];
+  gLedReact = renderLeds(gLedLive, frame, next, board::kLedCount);
+  if (gLedFrameValid && memcmp(next, gLedFrame, sizeof(next)) == 0) return;
+  memcpy(gLedFrame, next, sizeof(next));
+  gLedFrameValid = true;
+  leds::show(gLedFrame, board::kLedCount);
+}
+#endif
 
 void handleCommand(const Command& cmd, uint32_t now) {
   switch (cmd.type) {
@@ -93,8 +186,33 @@ void handleCommand(const Command& cmd, uint32_t now) {
       break;
     case CommandType::Settings:
       cmd.settings.applyTo(gConfig.settings);
+      if (cmd.settings.mask & SettingsPatch::kSaver) {
+        memcpy(gConfig.saver.name, cmd.settings.saver, sizeof(gConfig.saver.name));
+      }
       applySettings();
       gStore.markDirty(now);
+      break;
+    case CommandType::Icon:
+#if defined(CHOCPILOT_BOARD_V0)
+      if (cmd.icon.clear) {
+        gIcons.clear(cmd.icon.key);
+        gDisplay.iconsChanged();
+      } else if (gIcons.write(cmd.icon.key, cmd.icon.offset, cmd.icon.data, cmd.icon.len)) {
+        gDisplay.iconsChanged();
+      }
+#endif
+      break;
+    case CommandType::Time:
+      gClock.set(cmd.time.hour, cmd.time.minute, cmd.time.second, now);
+      break;
+    case CommandType::Leds:
+#if defined(CHOCPILOT_BOARD_V0)
+      cmd.leds.applyTo(gLedLive);
+      if (cmd.leds.save) {
+        cmd.leds.applyTo(gConfig.leds);
+        gStore.markDirty(now);
+      }
+#endif
       break;
     case CommandType::SetFallback:
       cmd.fallback.applyTo(gConfig.fallback);
@@ -102,7 +220,7 @@ void handleCommand(const Command& cmd, uint32_t now) {
       break;
     case CommandType::Reboot:
       if (cmd.hasId) gLink.sendAck(cmd.id);
-      Serial.flush();
+      hal::serialFlush();
       gStore.flush(gConfig);
       hal::reboot(cmd.flag);
       break;
@@ -168,15 +286,29 @@ void updateTestCombo(uint32_t now) {
 }  // namespace
 
 void setup() {
+  const bool loaded = gStore.load(gConfig);
+  // Ekran przed USB: inicjalizacja LCD trwa ok. 0,4 s, a host zaczyna wyliczanie zaraz po
+  // włączeniu USB (na Pro Micro USB uruchamia rdzeń Arduino przed setup()).
+  gDisplay.begin(gConfig.settings);
+  gDisplay.restore(gConfig.display);
+  gLink.diag = gDisplay.diag();
+#if defined(CHOCPILOT_BOARD_V0)
+  gDisplay.setClock(&gClock);
+  gDisplay.setIcons(&gIcons);
+  gLink.iconSize = kIconSize;
+  gLink.savers = saverNames();
+  gLink.saverCount = saverCount();
+#endif
+
   hal::usbBegin();
   gLink.begin();
 
-  const bool loaded = gStore.load(gConfig);
-  gDisplay.begin(gConfig.settings);
-  gDisplay.restore(gConfig.display);
-  gLink.diag = &gDisplay.diag();
-
   gMatrix.begin();
+#if defined(CHOCPILOT_BOARD_V0)
+  gControls.begin();
+  leds::begin();
+  gLedLive = gConfig.leds;
+#endif
   applySettings();
   gFallback.setEnabled(true);
 
@@ -186,12 +318,16 @@ void setup() {
 }
 
 void loop() {
+  hal::poll();
   const uint32_t now = millis();
 
   const uint32_t nowUs = micros();
   if (nowUs - gLastScanUs >= kScanIntervalUs) {
     gLastScanUs = nowUs;
     gMatrix.scan(now, gConfig.settings.debounceMs, onKeyChange);
+#if defined(CHOCPILOT_BOARD_V0)
+    gControls.update(now, gConfig.settings.debounceMs, onEncoder, onEncoderKey, onSlider);
+#endif
     updateTestCombo(now);
   }
 
@@ -201,6 +337,9 @@ void loop() {
 
   gDisplay.setTestSnapshot(gTest);
   gDisplay.update(now);
+#if defined(CHOCPILOT_BOARD_V0)
+  updateLeds(now);
+#endif
 
   if (gStore.update(gConfig, now)) {
     gLink.sendLog(CHOCPILOT_F("info"), CHOCPILOT_F("config saved"));

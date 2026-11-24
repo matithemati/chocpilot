@@ -39,6 +39,38 @@ constexpr int kFallbackSlots = kTotalKeys;
 
 enum class DisplayMode : uint8_t { None = 0, Profile, Grid, Text, Bar };
 
+// Podświetlenie LED (ChocPilot v0: 12 × WS2812B na spodzie). Status = kolor połączenia
+// (online turkus, offline bursztyn); pozostałe tryby używają koloru r/g/b.
+enum class LedMode : uint8_t { Off = 0, Status, Static, Breathe, Rainbow };
+constexpr uint8_t kLedSpeedMin = 1;
+constexpr uint8_t kLedSpeedMax = 10;
+
+struct LedSettings {
+  LedMode mode = LedMode::Status;
+  uint8_t r = 0;
+  uint8_t g = 160;
+  uint8_t b = 192;
+  uint8_t brightness = 128;  // 0–255, w firmware ograniczona do ok. 1/3 pełnej (prąd USB)
+  uint8_t speed = 5;         // 1–10: tempo oddychania i tęczy
+  bool react = true;         // błysk diody przy naciśniętym klawiszu
+};
+
+// Animacja wygaszacza ekranu (ChocPilot v0): nazwa wbudowanej animacji, np. "rabbit"; pusta =
+// wygaszony ekran. Nazwa zamiast numeru – kolejność i liczba animacji mogą się zmieniać.
+constexpr size_t kSaverNameBuf = 12;  // do 11 znaków [a-z0-9_]
+
+struct SaverSettings {
+  char name[kSaverNameBuf] = {0};
+};
+
+// Ikony klawiszy na LCD (ChocPilot v0): 32 × 32 px, paleta 16 kolorów RGB565 (32 B) + piksele
+// 4 bity (512 B) – rysowane w skali 2 w kafelkach siatki zamiast etykiet. Tylko w RAM: aplikacja
+// wysyła je po połączeniu (komenda icon w kawałkach), po restarcie bez aplikacji – etykiety.
+constexpr uint8_t kIconSize = 32;
+constexpr uint16_t kIconPaletteBytes = 16 * 2;
+constexpr uint16_t kIconBytes = kIconPaletteBytes + kIconSize * kIconSize / 2;  // 544
+constexpr uint8_t kIconChunkMax = 128;  // bajtów obrazu w jednej komendzie (base64 ≈ 172 znaki)
+
 // Trwały stan ekranu (tylko tryby profile / grid).
 struct DisplayState {
   DisplayMode mode = DisplayMode::None;
@@ -50,6 +82,8 @@ struct DeviceConfig {
   Settings settings;
   FallbackBinding fallback[kFallbackSlots];
   DisplayState display;
+  LedSettings leds;    // od wersji 2 zapisu
+  SaverSettings saver;  // od wersji 3; nowe pola zawsze na końcu (starszy zapis = prefiks)
 
   void setDefaults();
   static void defaultFallback(FallbackBinding (&slots)[kFallbackSlots]);

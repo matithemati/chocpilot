@@ -88,6 +88,16 @@ void Fallback::onKey(uint8_t key, bool down) {
   }
 }
 
+void Fallback::tapMedia(uint16_t usage) {
+  if (!enabled_ || usage == 0) return;
+  // Raport consumer ma jeden usage: naciśnięcie i od razu zwolnienie (trzymany klawisz
+  // multimedialny też zostaje zwolniony – jego puszczenie nic już nie wysyła).
+  pushConsumer(usage);
+  pushConsumer(0);
+  heldConsumerKey_ = 0;
+  anySent_ = true;
+}
+
 void Fallback::update() {
   if (count_ == 0 || !hal::hidReady()) return;
   const Report& r = queue_[head_];

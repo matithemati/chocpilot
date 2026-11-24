@@ -15,10 +15,14 @@ from ..core.protocol import DeviceInfo
 class QtBridge(QObject, ControllerListener):
     connectionChanged = Signal(bool, object, object)  # connected, DeviceInfo|None, port|None
     rawInput = Signal(int, bool)  # klawisz, wciśnięty  # key|None, down, steps
+    encoderInput = Signal(int, int)  # pokrętło 1–2, delta (zatrzaski)
+    encoderKeyInput = Signal(int, bool)  # pokrętło 1–2, przycisk wciśnięty
+    sliderInput = Signal(int)  # położenie suwaka 0–100
     gestureFired = Signal(object, object)  # GestureEvent, ActionBase|None
     profileChanged = Signal(object, str)  # Profile, reason
     actionFinished = Signal(str, object)  # summary, error|None
     testModeChanged = Signal(bool)
+    klipperChanged = Signal(bool, str, object)  # aktywny, drukarka, PrinterStatus|None
     logEntry = Signal(object)  # LogEntry
 
     # Metody ControllerListener – emitują sygnały (połączenia kolejkowane do wątku GUI)
@@ -29,6 +33,15 @@ class QtBridge(QObject, ControllerListener):
 
     def raw_input(self, key: int, down: bool) -> None:
         self.rawInput.emit(key, down)
+
+    def encoder_input(self, index: int, delta: int) -> None:
+        self.encoderInput.emit(index, delta)
+
+    def encoder_key_input(self, index: int, down: bool) -> None:
+        self.encoderKeyInput.emit(index, down)
+
+    def slider_input(self, value: int) -> None:
+        self.sliderInput.emit(value)
 
     def gesture(self, event: GestureEvent, action: ActionBase | None) -> None:
         self.gestureFired.emit(event, action)
@@ -41,6 +54,9 @@ class QtBridge(QObject, ControllerListener):
 
     def test_mode_changed(self, active: bool) -> None:
         self.testModeChanged.emit(active)
+
+    def klipper_changed(self, active: bool, printer: str, status: object) -> None:
+        self.klipperChanged.emit(active, printer, status)
 
     def on_log(self, entry: LogEntry) -> None:
         self.logEntry.emit(entry)

@@ -349,6 +349,28 @@ class ProfileAction(ActionBase):
 
 
 @register_action(
+    "klipper", "Tryb Klipper", "Sterowanie drukarką 3D (Klipper) z klawiszy, pokręteł i suwaka"
+)
+class KlipperAction(ActionBase):
+    type: Literal["klipper"] = "klipper"
+    mode: Literal["toggle", "enter", "exit"] = Field(
+        "toggle",
+        title="Działanie",
+        json_schema_extra={
+            "labels": {"toggle": "Włącz / wyłącz", "enter": "Włącz", "exit": "Wyłącz"}
+        },
+    )
+
+    def run(self, ctx: ActionContext) -> None:
+        ctx.host.klipper_mode(self.mode)
+
+    def summary(self) -> str:
+        return {"enter": "Włącz tryb Klipper", "exit": "Wyłącz tryb Klipper"}.get(
+            self.mode, "Tryb Klipper"
+        )
+
+
+@register_action(
     "layer", "Warstwa (profil na czas trzymania)", "Profil aktywny tylko podczas trzymania klawisza"
 )
 class LayerAction(ActionBase):

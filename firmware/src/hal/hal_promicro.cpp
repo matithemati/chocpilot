@@ -57,6 +57,8 @@ void usbBegin() {
   // USB CDC + HID uruchamia rdzeń Arduino (main.cpp → USBDevice.attach()).
 }
 
+void poll() {}
+
 void reboot(bool bootloader) {
   delay(50);  // czas na wysłanie ack
   // Caterina po resecie watchdogiem sprawdza „magiczny klucz” 0x7777: stary bootloader
@@ -70,6 +72,22 @@ void reboot(bool bootloader) {
   while (true) {
   }
 }
+
+// --- usb_cdc ---
+
+void serialBegin() { Serial.begin(115200); }
+
+int serialAvailable() { return Serial.available(); }
+
+int serialRead() { return Serial.read(); }
+
+// Rdzeń AVR: operator bool() czeka 10 ms, a availableForWrite() podaje tylko wolne miejsce
+// w 64-bajtowym buforze końcówki USB – stąd sam stan DTR.
+bool serialConnected() { return Serial.dtr(); }
+
+void serialWrite(const uint8_t* data, size_t len) { Serial.write(data, len); }
+
+void serialFlush() { Serial.flush(); }
 
 // --- storage ---
 

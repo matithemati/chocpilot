@@ -12,7 +12,7 @@ wysyła zapisane skróty przez USB HID (tryb awaryjny).
 Projekt powstał z kodu macropada Tap32 (3×3 MX + enkoder) – ChocPilot nie ma pokrętła.
 
 ```
-firmware/   PlatformIO: środowiska promicro (5 V), promicro_3v3, native (testy)
+firmware/   PlatformIO: środowiska promicro (5 V), promicro_3v3, chocpilot_v0 (STM32), native (testy)
 app/        aplikacja Python 3.12+ (PySide6): rdzeń, GUI, symulator, testy
 docs/       PROTOCOL.md, WIRING.md, schematic.png (schemat płytki)
 ```
@@ -29,6 +29,11 @@ docs/       PROTOCOL.md, WIRING.md, schematic.png (schemat płytki)
   import/eksport do JSON.
 - **Ekran 128×64**: siatka etykiet 2×4 (jak klawisze) albo duża nazwa profilu, pasek głośności,
   etykieta po akcji, wygaszacz, znacznik online/offline, tryb testu sprzętu.
+- **Pokrętła i suwak** (płytka ChocPilot v0): każde pokrętło ma akcje dla obrotu w prawo,
+  w lewo i naciśnięcia (te same typy akcji co klawisze; głośność i przewijanie mnożą krok przez
+  liczbę zatrzasków). Suwak ustawia głośność systemu albo wybranego programu (0–100 %).
+  Domyślnie pokrętło 1 = głośność / wycisz, pokrętło 2 = przewijanie / odtwarzaj-pauza.
+  Podgląd w aplikacji pokazuje je po pierwszym podłączeniu płytki v0.
 - **Tryb awaryjny HID**: po 3 s bez sygnału z aplikacji klawisze wysyłają skróty wyliczone
   z profilu (akcje „skrót” i „multimedia”); domyślnie dolny rząd: ciszej, głośniej,
   odtwarzaj/pauza, wycisz.
@@ -72,8 +77,8 @@ z definicji płytki SparkFun: **1B4F:9206** (5 V) / **1B4F:9204** (3,3 V). Aplik
 nigdy PID-ów bootloadera Caterina (bajty `hello` byłyby dla niego komendami).
 
 ATmega32U4 ma **2,5 KB RAM i 28 KB flash** (z bootloaderem Caterina). Zużycie (sprawdzone
-2026-10, `pio run -e promicro`): **flash 25 974 B / 28 672 B (90,6 %)**, **RAM statycznie
-1 958 B / 2 560 B (76,5 %)** – reszta to stos (bufor pasa ekranu, parser). Dlatego:
+2026-11, `pio run -e promicro`): **flash 27 332 B / 28 672 B (95,3 %)**, **RAM statycznie
+2 025 B / 2 560 B (79,1 %)** – reszta to stos (bufor pasa ekranu, parser). Dlatego:
 
 - **Ekran**: zamiast grafiki U8g2 z czcionkami – mini-renderer (`firmware/src/mini_gfx.cpp`)
   na sterowniku U8x8 (SSD1309 `noname2`): jeden krój **5×7 ASCII** w skali 1×–3×, pogrubiony
@@ -110,6 +115,63 @@ na ok. 8 s, potem wraca do programu) i avrdude wgrywa firmware. Menu aplikacji
 klucz” i restartuje się watchdogiem) – przydatne przy wgrywaniu ręcznym avrdude w ciągu tych 8 s.
 Gdy firmware nie działa: zewrzyj dwa razy szybko **RST** z **GND** i od razu wgrywaj.
 
+### ChocPilot v0 (własna płytka, STM32F072)
+
+Płytka z `pcb/chocpilot-v0` (STM32F072CBT6, LCD 2" ST7789V, 2 pokrętła EC11, suwak 45 mm,
+12 × WS2812B) ma środowisko **`chocpilot_v0`**: ten sam protokół, ta sama logika (`src/main.cpp`,
+`lib/chocpilotcore`), inna warstwa sprzętowa.
+
+```bash
+cd firmware
+pio run -e chocpilot_v0
+```
+
+- **Rdzeń**: Arduino STM32duino (platforma `ststm32`, płytka `boards/chocpilot_v0.json` =
+  wariant generic F072CB), zegar 48 MHz z HSI48 bez kwarcu, dostrajany przez CRS do ramek USB.
+- **USB**: [TinyUSB](https://github.com/hathach/tinyusb) 0.18 (zamiast USB rdzenia, który nie
+  łączy CDC z HID) – urządzenie złożone CDC + HID, nazwa „ChocPilot”, VID:PID **1209:0001**
+  (testowy PID pid.codes). Aplikacja znajduje port po nazwie, zapasowo po tej parze.
+- **Ekran**: kolorowy 320 × 240 (`src/display_tft.cpp`, `src/st7789.cpp`, SPI1 24 MHz bez bufora
+  ramki) – te same tryby co OLED (siatka 2×4, profil, tekst, pasek, flash, offline, test),
+  jasność = PWM podświetlenia, `flip` = obrót o 180°. Krój 5×7 jak na Pro Micro (bez ogonków).
+- **Matryca** 2×4 COL2ROW z mapą klawiszy z płytki (`src/boards/board_v0.h`), numeracja K1–K8 bez zmian.
+- **Pokrętła i suwak** (`src/controls.cpp`): timery TIM2/TIM3 w trybie enkodera, suwak przez ADC
+  z filtrem i histerezą. Wysyłane jako `encoder`, `encoder_key`, `slider` (docs/PROTOCOL.md) –
+  akcje przypisuje się w aplikacji (sekcja „Funkcje”). **Offline** pokrętło 1 zmienia głośność,
+  jego przycisk wycisza.
+- **LED** (`src/leds.cpp`, SPI2 3 MHz; efekty `lib/chocpilotcore/src/led_effects.cpp`): tryby
+  stan połączenia (online turkus, offline bursztyn), stały kolor, oddychanie, tęcza i wyłączone,
+  błysk diody przy naciśniętym klawiszu, jasność ograniczona do ok. 1/3 (prąd USB). Ustawienia
+  z komendy `leds` są zapisywane w urządzeniu; w trybie testu kolejno R / G / B / biały, przy
+  wygaszaczu wyłączone. W aplikacji: **Ustawienia → Podświetlenie** (podgląd na żywo, Anuluj
+  przywraca) i własny kolor w **Właściwościach profilu**.
+- **Wygaszacz z animacją** (`src/saver.cpp`): po czasie `screensaver_s` zamiast gaszenia ekranu
+  po trawie skacze królik (24 × 16 px, skala 5) albo kłusuje corgi (40 × 24 px z cieniowaniem,
+  skala 4; paleta ≤ 15 kolorów, przerysowywany tylko pas postaci), a u góry na środku jest
+  godzina HH:MM – czas podaje aplikacja (komenda `time`), płytka liczy dalej sama. Wybór: aplikacja → Ustawienia → Urządzenie → **Animacja
+  wygaszacza**; dowolny klawisz / pokrętło budzi ekran, diody LED w tym czasie są zgaszone.
+  Animacje są zdefiniowane raz, w `app/chocpilot/core/savers.py` (ramki jako tekst) –
+  `python firmware/tools/gen_savers.py` generuje z nich `src/saver_data.h`, a aplikacja rysuje
+  z tych samych danych podgląd. Nowa animacja = wpis w `SAVERS` + generator; własne GIF-y będą
+  w przyszłości zamieniane w aplikacji na ten sam format i wysyłane do urządzenia.
+- **Ustawienia** w emulacji EEPROM rdzenia (ostatnia strona flash, 2 KB), ten sam format co na AVR.
+- Zużycie (2026-11, `pio run -e chocpilot_v0`): **flash 55 600 B / 128 KB (42 %)**,
+  **RAM 6 716 B / 16 KB (41 %)**.
+
+**Wgrywanie** – bootloader DFU w ROM układu:
+
+1. Wejście do bootloadera: menu aplikacji **Urządzenie → Tryb wgrywania firmware** (firmware
+   odłącza USB i skacze do bootloadera) albo przyciski na spodzie płytki: trzymaj **BOOT0**,
+   naciśnij i puść **RESET**, puść BOOT0. Windows widzi wtedy „STM32 BOOTLOADER” (0483:DF11).
+2. Za pierwszym razem przypisz mu sterownik WinUSB programem [Zadig](https://zadig.akeo.ie/)
+   (albo zainstaluj STM32CubeProgrammer i wgraj `.pio\build\chocpilot_v0\firmware.bin` od adresu
+   0x08000000).
+3. `pio run -e chocpilot_v0 -t upload` (dfu-util) – po wgraniu płytka sama uruchamia program.
+
+Do sprawdzenia na pierwszej płytce (bez sprzętu nie dało się tego zweryfikować): kierunek
+pokręteł (`kEncoderDir` w `board_v0.h`), kolory LCD (gdyby czerwony i niebieski były zamienione –
+bit RGB/BGR w `st7789.cpp`), orientacja obrazu (ustawienie `flip`).
+
 ### Testy firmware (na PC)
 
 Parser protokołu, debounce, kody HID i zapis konfiguracji mają testy jednostkowe w środowisku
@@ -137,6 +199,7 @@ Opcje:
 | Opcja | Działanie |
 |---|---|
 | `--simulate` | zamiast urządzenia uruchamia **symulator** (okno z 8 klawiszami 2×4 i podglądem OLED 128×64) |
+| `--board chocpilot_v0` | z `--simulate`: symulator płytki v0 – dodatkowo 2 pokrętła i suwak |
 | `--minimized` | start w zasobniku |
 | `--config PLIK` | inny plik konfiguracji |
 | `--verbose` | dziennik na konsoli |
@@ -196,6 +259,48 @@ Nowy typ akcji: klasa dziedzicząca po `ActionBase` z polem `type: Literal["nazw
 `run(ctx)` i dekoratorem `@register_action("nazwa", "Etykieta")`. Formularz w GUI tworzy się
 automatycznie z pól modelu.
 
+
+## Ikony klawiszy
+
+Na ekranie LCD (ChocPilot v0) każdy klawisz może mieć ikonę zamiast etykiety: edytor klawisza →
+**Ikona na ekranie** → *Wybierz ikonę…*. Okno wyboru ma wyszukiwarkę i kategorie:
+
+- **wbudowane** – ok. 120 ikon liniowych (multimedia, edycja, programy, system, streaming, druk 3D,
+  symbole), zdefiniowane w `app/chocpilot/gui/icon_set.py`; nowa ikona = jeden wiersz SVG,
+- **emoji** – wszystkie emoji, które ma czcionka systemu (Windows: Segoe UI Emoji, ok. 1700),
+  wyszukiwane po angielskiej nazwie Unicode,
+- **własne** – pliki PNG / SVG / JPG z folderu ikon w katalogu konfiguracji (przycisk *Folder
+  własnych ikon*, potem *Odśwież*).
+
+Aplikacja zamienia ikonę na 32 × 32 px w 16 kolorach na tle kafelka i wysyła ją do urządzenia
+(komenda `icon`, docs/PROTOCOL.md), które rysuje ją w skali 2. Etykieta zostaje – pokazuje się
+w podglądzie po naciśnięciu i na ekranie OLED (Pro Micro nie ma miejsca na ikony).
+
+## Tryb Klipper (drukarki 3D)
+
+ChocPilot może sterować drukarkami 3D z [Klipperem](https://www.klipper3d.org/) przez API
+[Moonrakera](https://moonraker.readthedocs.io/) (to samo, którego używają Mainsail i Fluidd).
+Konfiguracja: strona **Klipper** w aplikacji.
+
+- **Drukarki:** nazwa, adres Moonrakera (np. `http://voron.local` albo `192.168.1.20:7125`),
+  opcjonalny klucz API; przycisk *Testuj połączenie* pokazuje stan drukarki.
+- **Włączanie trybu:** przytrzymaj przycisk pokrętła E2 (domyślnie 0,8 s; do wyboru E1 albo tylko
+  akcja). Krótkie naciśnięcie tego pokrętła działa jak zwykle (wykonuje się po puszczeniu).
+  Akcję **Tryb Klipper** (włącz / wyłącz / przełącz) można też przypisać do dowolnego klawisza.
+- **W trybie Klipper:**
+  - klawisze K1–K8 – polecenia z ustawień: G-code / makro, pauza / wznowienie, anuluj wydruk,
+    awaryjne zatrzymanie, restart firmware, następna drukarka, wyjście. Domyślnie: Home, Pauza,
+    PLA (stół 60 °C, dysza 200 °C), Stygnij, Silniki, Anuluj (przytrzymanie), Drukarka,
+    STOP (przytrzymanie);
+  - pokrętło E1 – ruch osi (naciśnięcie: X → Y → Z, krok i prędkość w ustawieniach; wymaga
+    bazowania osi); w trakcie wydruku – Z offset w locie (`SET_GCODE_OFFSET Z_ADJUST`);
+  - pokrętło E2 – temperatura dyszy / stołu, prędkość (M220), przepływ (M221), wentylator;
+    naciśnięcie zmienia parametr;
+  - suwak – wentylator chłodzenia albo prędkość wydruku 50–150 %;
+  - ekran – w tytule nazwa drukarki, stan (postęp wydruku) i temperatury, w siatce etykiety
+    klawiszy; nastawy pokazują się na chwilę na ekranie.
+- Szybkie kręcenie pokrętłem wysyła tylko najnowszą nastawę (bez kolejki starych poleceń).
+  Klucz API jest zapisywany w pliku konfiguracji aplikacji.
 ## Obudowa (OpenSCAD)
 
 `case/chocpilot_case.scad` – obudowa **93,5 × 101 × 20 mm** z płaską górą, symetryczna w obu osiach względem klawiszy i ekranu (lewa i dolna ścianka są grubsze o tyle, o ile PCB wystaje w prawo pod Pro Micro i ma większy margines nad górnym rzędem), dopasowana do

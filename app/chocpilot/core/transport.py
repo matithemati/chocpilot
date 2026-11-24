@@ -24,6 +24,7 @@ KNOWN_VID_PIDS = {
     (0x1B4F, 0x9204): "SparkFun Pro Micro 3,3 V",
     (0x2341, 0x8036): "Arduino Leonardo (klon Pro Micro)",
     (0x2341, 0x8037): "Arduino Micro (klon Pro Micro)",
+    (0x1209, 0x0001): "ChocPilot v0 (STM32F072)",
 }
 PRODUCT_NAME = "ChocPilot"
 

@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QPainter, QPaintEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -161,3 +162,27 @@ class Segmented(QFrame):
     def set_text(self, value: Any, text: str) -> None:
         if value in self.buttons:
             self.buttons[value].setText(text)
+
+
+class ComboWheelGuard(QObject):
+    """Kółko myszy nad zamkniętą listą rozwijaną nie zmienia wyboru – przewija stronę.
+
+    Filtr zdarzeń całej aplikacji (instalowany w gui/app.py): obejmuje każdą QComboBox, także
+    w tabelach i edytorach akcji. Otwarta lista działa jak zwykle – kółko przewija jej pozycje
+    (zdarzenia trafiają wtedy do widoku listy, nie do samej QComboBox).
+    """
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.Wheel and isinstance(obj, QComboBox):
+            # Przekazanie w górę, aż ktoś obsłuży kółko (obszar przewijania strony ustawień,
+            # panelu edytora, tabeli). Qt sam przekazuje dalej tylko zdarzenia z systemu, nie
+            # wysłane ponownie, więc idziemy po rodzicach ręcznie.
+            parent = obj.parentWidget()
+            while parent is not None:
+                event.ignore()
+                QApplication.sendEvent(parent, event)
+                if event.isAccepted() or parent.isWindow():
+                    break
+                parent = parent.parentWidget()
+            return True
+        return super().eventFilter(obj, event)

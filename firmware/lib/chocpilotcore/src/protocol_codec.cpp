@@ -462,8 +462,144 @@ ParseResult parseSettings(const char* obj, SettingsPatch& p) {
     p.mask |= SettingsPatch::kOledAddr;
     p.values.oledAddr = static_cast<uint8_t>(value);
   }
+#if !defined(CHOCPILOT_NO_SAVER)
+  if (member(obj, CHOCPILOT_P("saver")) != nullptr) {
+    if (!readStringField(obj, CHOCPILOT_P("saver"), p.saver, sizeof(p.saver), kSaverNameBuf - 1,
+                         err)) {
+      return invalid(err);
+    }
+    if (equalsP(p.saver, strlen(p.saver), CHOCPILOT_P("off"))) p.saver[0] = '\0';
+    p.mask |= SettingsPatch::kSaver;
+  }
+#endif
   return ok();
 }
+
+// {"type":"leds","mode":"breathe","color":"#00A0C0","brightness":96,"speed":5,"react":true,
+//  "save":true} – wszystkie pola opcjonalne.
+ParseResult parseLeds(const char* obj, LedPatch& p) {
+  FlashText err = nullptr;
+  int32_t value = 0;
+  bool present = false;
+  bool flag = false;
+
+  const char* mode = member(obj, CHOCPILOT_P("mode"));
+  if (mode != nullptr) {
+    if (!isString(mode)) return invalid(CHOCPILOT_F("mode must be a string"));
+    if (stringIs(mode, CHOCPILOT_P("off"))) {
+      p.values.mode = LedMode::Off;
+    } else if (stringIs(mode, CHOCPILOT_P("status"))) {
+      p.values.mode = LedMode::Status;
+    } else if (stringIs(mode, CHOCPILOT_P("static"))) {
+      p.values.mode = LedMode::Static;
+    } else if (stringIs(mode, CHOCPILOT_P("breathe"))) {
+      p.values.mode = LedMode::Breathe;
+    } else if (stringIs(mode, CHOCPILOT_P("rainbow"))) {
+      p.values.mode = LedMode::Rainbow;
+    } else {
+      return invalid(CHOCPILOT_F("unknown led mode"));
+    }
+    p.mask |= LedPatch::kMode;
+  }
+
+  const char* color = member(obj, CHOCPILOT_P("color"));
+  if (color != nullptr) {
+    // "#RRGGBB": cudzysłów, #, 6 cyfr szesnastkowych, cudzysłów
+    if (!isString(color) || skipString(color) - color != 9 || color[1] != '#') {
+      return invalid(CHOCPILOT_F("color must be #RRGGBB"));
+    }
+    uint8_t rgb[3];
+    for (uint8_t i = 0; i < 3; ++i) {
+      const int8_t hi = hexValue(color[2 + 2 * i]);
+      const int8_t lo = hexValue(color[3 + 2 * i]);
+      if (hi < 0 || lo < 0) return invalid(CHOCPILOT_F("color must be #RRGGBB"));
+      rgb[i] = static_cast<uint8_t>(hi << 4 | lo);
+    }
+    p.values.r = rgb[0];
+    p.values.g = rgb[1];
+    p.values.b = rgb[2];
+    p.mask |= LedPatch::kColor;
+  }
+
+  if (!readIntField(obj, CHOCPILOT_P("brightness"), 0, 255, value, present, err)) return invalid(err);
+  if (present) {
+    p.mask |= LedPatch::kBrightness;
+    p.values.brightness = static_cast<uint8_t>(value);
+  }
+  if (!readIntField(obj, CHOCPILOT_P("speed"), kLedSpeedMin, kLedSpeedMax, value, present, err)) {
+    return invalid(err);
+  }
+  if (present) {
+    p.mask |= LedPatch::kSpeed;
+    p.values.speed = static_cast<uint8_t>(value);
+  }
+  if (!readBoolField(obj, CHOCPILOT_P("react"), flag, present, err)) return invalid(err);
+  if (present) {
+    p.mask |= LedPatch::kReact;
+    p.values.react = flag;
+  }
+  if (!readBoolField(obj, CHOCPILOT_P("save"), flag, present, err)) return invalid(err);
+  p.save = present ? flag : true;
+  return ok();
+}
+
+namespace {
+int8_t base64Value(char c) {
+  if (c >= 'A' && c <= 'Z') return static_cast<int8_t>(c - 'A');
+  if (c >= 'a' && c <= 'z') return static_cast<int8_t>(c - 'a' + 26);
+  if (c >= '0' && c <= '9') return static_cast<int8_t>(c - '0' + 52);
+  if (c == '+') return 62;
+  if (c == '/') return 63;
+  return -1;
+}
+}  // namespace
+
+#if !defined(CHOCPILOT_NO_ICONS)
+// {"type":"icon","key":3,"offset":128,"data":"<base64>"} albo {"type":"icon","key":3,"clear":true}
+ParseResult parseIcon(const char* obj, IconChunk& ic) {
+  FlashText err = nullptr;
+  int32_t value = 0;
+  bool present = false;
+  if (!readIntField(obj, CHOCPILOT_P("key"), 1, kTotalKeys, value, present, err)) return invalid(err);
+  if (!present) return invalid(CHOCPILOT_F("missing key"));
+  ic.key = static_cast<uint8_t>(value);
+  bool flag = false;
+  if (!readBoolField(obj, CHOCPILOT_P("clear"), flag, present, err)) return invalid(err);
+  if (present && flag) {
+    ic.clear = true;
+    return ok();
+  }
+  if (!readIntField(obj, CHOCPILOT_P("offset"), 0, kIconBytes - 1, value, present, err)) {
+    return invalid(err);
+  }
+  ic.offset = present ? static_cast<uint16_t>(value) : 0;
+  const char* data = member(obj, CHOCPILOT_P("data"));
+  if (!isString(data)) return invalid(CHOCPILOT_F("missing data"));
+  const size_t len = static_cast<size_t>(skipString(data) - data - 2);
+  const int n = decodeBase64(data + 1, len, ic.data, sizeof(ic.data));
+  if (n <= 0 || ic.offset + n > kIconBytes) return invalid(CHOCPILOT_F("bad icon data"));
+  ic.len = static_cast<uint8_t>(n);
+  return ok();
+}
+#endif
+
+#if !defined(CHOCPILOT_NO_SAVER)
+// {"type":"time","hour":14,"minute":5,"second":30} – second opcjonalne.
+ParseResult parseTime(const char* obj, TimeOfDay& t) {
+  FlashText err = nullptr;
+  int32_t value = 0;
+  bool present = false;
+  if (!readIntField(obj, CHOCPILOT_P("hour"), 0, 23, value, present, err)) return invalid(err);
+  if (!present) return invalid(CHOCPILOT_F("missing hour"));
+  t.hour = static_cast<uint8_t>(value);
+  if (!readIntField(obj, CHOCPILOT_P("minute"), 0, 59, value, present, err)) return invalid(err);
+  if (!present) return invalid(CHOCPILOT_F("missing minute"));
+  t.minute = static_cast<uint8_t>(value);
+  if (!readIntField(obj, CHOCPILOT_P("second"), 0, 59, value, present, err)) return invalid(err);
+  t.second = present ? static_cast<uint8_t>(value) : 0;
+  return ok();
+}
+#endif
 
 ParseResult parseBinding(const char* obj, uint8_t& slot, FallbackBinding& b) {
   char name[kNameBuf];
@@ -664,6 +800,18 @@ void SettingsPatch::applyTo(Settings& s) const {
   if (mask & kOledAddr) s.oledAddr = values.oledAddr;
 }
 
+void LedPatch::applyTo(LedSettings& s) const {
+  if (mask & kMode) s.mode = values.mode;
+  if (mask & kColor) {
+    s.r = values.r;
+    s.g = values.g;
+    s.b = values.b;
+  }
+  if (mask & kBrightness) s.brightness = values.brightness;
+  if (mask & kSpeed) s.speed = values.speed;
+  if (mask & kReact) s.react = values.react;
+}
+
 void FallbackPatch::applyTo(FallbackBinding (&target)[kFallbackSlots]) const {
   if (replace) {
     for (FallbackBinding& b : target) b = FallbackBinding();
@@ -728,6 +876,22 @@ ParseResult parseCommand(const char* line, size_t len, Command& out) {
     out.type = CommandType::TestMode;
     return parseFlag(obj, CHOCPILOT_P("enable"), true, out.flag);
   }
+#if !defined(CHOCPILOT_NO_ICONS)
+  if (stringIs(type, CHOCPILOT_P("icon"))) {
+    out.type = CommandType::Icon;
+    return parseIcon(obj, out.icon);
+  }
+#endif
+#if !defined(CHOCPILOT_NO_SAVER)
+  if (stringIs(type, CHOCPILOT_P("time"))) {
+    out.type = CommandType::Time;
+    return parseTime(obj, out.time);
+  }
+#endif
+  if (stringIs(type, CHOCPILOT_P("leds"))) {
+    out.type = CommandType::Leds;
+    return parseLeds(obj, out.leds);
+  }
   if (stringIs(type, CHOCPILOT_P("debug"))) {
     out.type = CommandType::Debug;
     return parseFlag(obj, CHOCPILOT_P("enable"), true, out.flag);
@@ -737,7 +901,8 @@ ParseResult parseCommand(const char* line, size_t len, Command& out) {
 }
 
 size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool online,
-                  const I2cDiag* diag) {
+                  const I2cDiag* diag, bool encoder, uint8_t leds,
+                  const char* const* savers, uint8_t saverCount, uint8_t iconSize) {
   Writer w(buf, cap);
   w.raw(CHOCPILOT_P("{\"type\":\"hello\",\"device\":\"chocpilot\",\"fw\":"));
   w.quoted(fw, false);
@@ -745,8 +910,25 @@ size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool
   w.quoted(board, false);
   w.raw(CHOCPILOT_P(",\"keys\":"));
   w.number(static_cast<uint32_t>(kTotalKeys));
-  w.raw(CHOCPILOT_P(",\"encoder\":false,\"hid\":true,\"online\":"));
+  w.raw(encoder ? CHOCPILOT_P(",\"encoder\":true,\"hid\":true,\"online\":")
+                : CHOCPILOT_P(",\"encoder\":false,\"hid\":true,\"online\":"));
   w.boolean(online);
+  if (leds > 0) {
+    w.raw(CHOCPILOT_P(",\"leds\":"));
+    w.number(static_cast<uint32_t>(leds));
+  }
+  if (iconSize > 0) {
+    w.raw(CHOCPILOT_P(",\"icon\":"));
+    w.number(static_cast<uint32_t>(iconSize));
+  }
+  if (savers != nullptr && saverCount > 0) {
+    w.raw(CHOCPILOT_P(",\"savers\":["));
+    for (uint8_t i = 0; i < saverCount; ++i) {
+      if (i > 0) w.put(',');
+      w.quoted(savers[i], false);
+    }
+    w.put(']');
+  }
   if (diag != nullptr) {
     w.raw(CHOCPILOT_P(",\"oled\":"));
     if (diag->oledAddr != 0) {
@@ -780,6 +962,38 @@ size_t buildKey(char* buf, size_t cap, uint8_t key, bool down, uint32_t t) {
   w.raw(CHOCPILOT_P("{\"type\":\"key\",\"key\":"));
   w.number(static_cast<uint32_t>(key));
   w.raw(down ? CHOCPILOT_P(",\"action\":\"down\",\"t\":") : CHOCPILOT_P(",\"action\":\"up\",\"t\":"));
+  w.number(t);
+  w.put('}');
+  return w.finish();
+}
+
+size_t buildEncoder(char* buf, size_t cap, uint8_t index, int16_t delta, uint32_t t) {
+  Writer w(buf, cap);
+  w.raw(CHOCPILOT_P("{\"type\":\"encoder\",\"index\":"));
+  w.number(static_cast<uint32_t>(index));
+  w.raw(CHOCPILOT_P(",\"delta\":"));
+  w.number(static_cast<int32_t>(delta));
+  w.raw(CHOCPILOT_P(",\"t\":"));
+  w.number(t);
+  w.put('}');
+  return w.finish();
+}
+
+size_t buildEncoderKey(char* buf, size_t cap, uint8_t index, bool down, uint32_t t) {
+  Writer w(buf, cap);
+  w.raw(CHOCPILOT_P("{\"type\":\"encoder_key\",\"index\":"));
+  w.number(static_cast<uint32_t>(index));
+  w.raw(down ? CHOCPILOT_P(",\"action\":\"down\",\"t\":") : CHOCPILOT_P(",\"action\":\"up\",\"t\":"));
+  w.number(t);
+  w.put('}');
+  return w.finish();
+}
+
+size_t buildSlider(char* buf, size_t cap, uint8_t value, uint32_t t) {
+  Writer w(buf, cap);
+  w.raw(CHOCPILOT_P("{\"type\":\"slider\",\"value\":"));
+  w.number(static_cast<uint32_t>(value));
+  w.raw(CHOCPILOT_P(",\"t\":"));
   w.number(t);
   w.put('}');
   return w.finish();
@@ -825,5 +1039,32 @@ size_t buildTest(char* buf, size_t cap, bool active) {
   return w.finish();
 }
 
-}  // namespace chocpilot
+int decodeBase64(const char* src, size_t srcLen, uint8_t* dst, size_t cap) {
+  if (srcLen % 4 != 0) return -1;
+  size_t out = 0;
+  for (size_t i = 0; i < srcLen; i += 4) {
+    int8_t v[4];
+    uint8_t pad = 0;
+    for (uint8_t j = 0; j < 4; ++j) {
+      const char c = src[i + j];
+      if (c == '=' && i + 4 == srcLen && j >= 2) {
+        v[j] = 0;
+        ++pad;
+      } else {
+        if (pad > 0) return -1;  // znak po '='
+        v[j] = base64Value(c);
+        if (v[j] < 0) return -1;
+      }
+    }
+    const uint32_t bits = static_cast<uint32_t>(v[0]) << 18 | static_cast<uint32_t>(v[1]) << 12 |
+                          static_cast<uint32_t>(v[2]) << 6 | static_cast<uint32_t>(v[3]);
+    const uint8_t bytes = static_cast<uint8_t>(3 - pad);
+    if (out + bytes > cap) return -1;
+    dst[out++] = static_cast<uint8_t>(bits >> 16);
+    if (bytes > 1) dst[out++] = static_cast<uint8_t>(bits >> 8);
+    if (bytes > 2) dst[out++] = static_cast<uint8_t>(bits);
+  }
+  return static_cast<int>(out);
+}
 
+}  // namespace chocpilot

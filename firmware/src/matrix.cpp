@@ -32,9 +32,10 @@ void Matrix::scan(uint32_t nowMs, uint8_t debounceMs, KeyCallback onChange) {
     delayMicroseconds(kRowSettleUs);
     for (uint8_t c = 0; c < kCols; ++c) {
       const bool raw = digitalRead(board::kColPins[c]) == LOW;
-      const uint8_t index = static_cast<uint8_t>(r * kCols + c);
-      if (keys_[index].update(raw, nowMs, debounceMs) && onChange != nullptr) {
-        onChange(static_cast<uint8_t>(index + 1), keys_[index].pressed());
+      const uint8_t key = board::kKeyMap[r][c];
+      Debouncer& d = keys_[key - 1];
+      if (d.update(raw, nowMs, debounceMs) && onChange != nullptr) {
+        onChange(key, d.pressed());
       }
     }
     releaseRow(board::kRowPins[r]);

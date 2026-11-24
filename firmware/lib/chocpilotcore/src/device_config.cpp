@@ -1,5 +1,6 @@
 #include "device_config.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #include "hid_codes.h"
@@ -48,13 +49,29 @@ void DeviceConfig::setDefaults() {
   settings = Settings();
   defaultFallback(fallback);
   display = DisplayState();
+  leds = LedSettings();
+  saver = SaverSettings();
 }
 
 
 // Zapis binarny: [wersja][DeviceConfig]. Zmiana układu struktury wymaga nowej wersji (zwykle
 // zmienia też rozmiar) – stary zapis zostaje wtedy odrzucony i obowiązują wartości domyślne.
 namespace {
-constexpr uint8_t kBinaryConfigVersion = 1;
+constexpr uint8_t kBinaryConfigVersion = 3;
+// Starsze wersje to prefiksy obecnej struktury: v1 bez leds i saver, v2 bez saver. Rozmiar
+// starego zapisu = offsetof(pierwsze nowe pole) zaokrąglony do wyrównania struktury (nowe pola
+// mają wyrównanie 1, więc wyrównanie całości się nie zmieniło).
+constexpr size_t alignedSize(size_t fields) {
+  return (fields + alignof(DeviceConfig) - 1) / alignof(DeviceConfig) * alignof(DeviceConfig);
+}
+struct LegacyLayout {
+  uint8_t version;
+  size_t fields;
+};
+constexpr LegacyLayout kLegacy[] = {
+    {1, offsetof(DeviceConfig, leds)},
+    {2, offsetof(DeviceConfig, saver)},
+};
 }
 
 size_t encodeConfig(const DeviceConfig& cfg, char* buf, size_t cap) {
@@ -67,10 +84,26 @@ size_t encodeConfig(const DeviceConfig& cfg, char* buf, size_t cap) {
 
 bool decodeConfig(const char* data, size_t len, DeviceConfig& cfg) {
   cfg.setDefaults();
-  if (len != 1 + sizeof(DeviceConfig) || static_cast<uint8_t>(data[0]) != kBinaryConfigVersion) {
-    return false;
+  const uint8_t version = len > 0 ? static_cast<uint8_t>(data[0]) : 0;
+  bool loaded = false;
+  if (version == kBinaryConfigVersion && len == 1 + sizeof(DeviceConfig)) {
+    memcpy(static_cast<void*>(&cfg), data + 1, sizeof(DeviceConfig));
+    loaded = true;
+  } else {
+    for (const LegacyLayout& l : kLegacy) {
+      if (version == l.version && len == 1 + alignedSize(l.fields)) {
+        memcpy(static_cast<void*>(&cfg), data + 1, l.fields);  // nowsze pola zostają domyślne
+        loaded = true;
+        break;
+      }
+    }
   }
-  memcpy(static_cast<void*>(&cfg), data + 1, sizeof(DeviceConfig));
+  if (!loaded) return false;
+  cfg.saver.name[kSaverNameBuf - 1] = '\0';
+
+  LedSettings& led = cfg.leds;
+  if (led.mode > LedMode::Rainbow) led.mode = LedMode::Status;
+  if (led.speed < kLedSpeedMin || led.speed > kLedSpeedMax) led.speed = 5;
 
   Settings& st = cfg.settings;
   if (st.debounceMs < 1 || st.debounceMs > 50) st.debounceMs = 8;

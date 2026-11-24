@@ -55,6 +55,7 @@ ignore = ["RUF001", "RUF002", "RUF003", "SIM105"]  # SIM105: try/except/pass jes
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B011", "RUF059"]
+"chocpilot/gui/icon_set.py" = ["E501"]  # dane SVG ikon
 
 [tool.mypy]
 python_version = "3.12"

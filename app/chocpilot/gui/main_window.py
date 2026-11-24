@@ -46,9 +46,10 @@ from . import i18n, theme
 from .action_editor import EditorContext
 from .bridge import QtBridge
 from .device_view import DeviceView
-from .editors import KeyEditor, ProfileEditor
+from .editors import EncoderEditor, KeyEditor, ProfileEditor, SliderEditor
 from .i18n import tr
 from .icons import STATUS_COLORS, app_icon, app_pixmap, dot_pixmap
+from .klipper_page import KlipperPage
 from .log_view import LogView
 from .settings_dialog import SettingsDialog
 from .widgets import Segmented, Switch, button, frame, label, styled
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow):
         self.quitting = False
         self.current_profile: Profile = controller.profiles.active
         self.current_key: int | None = None
+        self.current_control: str | None = None  # "e1", "e2", "slider"
         self._page = "config"
         self._paused = False
         self._test_mode = False
@@ -113,10 +115,16 @@ class MainWindow(QMainWindow):
         # Sygnały z kontrolera
         bridge.connectionChanged.connect(self._on_connection)
         bridge.rawInput.connect(self._on_raw_input)
+        bridge.encoderInput.connect(lambda i, d: self.device_view.highlight_encoder(i, d))
+        bridge.encoderKeyInput.connect(
+            lambda i, down: self.device_view.highlight_encoder_key(i, down)
+        )
+        bridge.sliderInput.connect(lambda v: self.device_view.show_slider(v))
         bridge.profileChanged.connect(self._on_profile_changed)
         bridge.actionFinished.connect(self._on_action_finished)
         bridge.logEntry.connect(self._on_log_entry)
         bridge.testModeChanged.connect(self._sync_test_action)
+        bridge.klipperChanged.connect(self._on_klipper_changed)
 
         # Odświeżanie podglądu OLED
         self._oled_timer = QTimer(self)
@@ -237,6 +245,7 @@ class MainWindow(QMainWindow):
         self.nav_buttons: dict[str, QPushButton] = {}
         for key, text, icon_name in (
             ("config", "Konfiguracja", "grid"),
+            ("klipper", "Klipper", "printer"),
             ("log", "Dziennik", "list"),
             ("settings", "Ustawienia", "sliders"),
         ):
@@ -386,8 +395,18 @@ class MainWindow(QMainWindow):
             tr("Wyłącz"),
             lambda: self.test_action.setChecked(False),
         )
+        self.klipper_banner = self._banner(
+            "bannerInfo",
+            "printer",
+            "info_text",
+            tr("Tryb Klipper"),
+            tr("Klawisze, pokrętła i suwak sterują drukarką 3D."),
+            tr("Wyłącz"),
+            lambda: self.controller.klipper_mode("exit"),
+        )
         v.addWidget(self.paused_banner)
         v.addWidget(self.test_banner)
+        v.addWidget(self.klipper_banner)
 
         self.pages = QStackedWidget()
         self.config_page = self._build_config_page()
@@ -399,7 +418,18 @@ class MainWindow(QMainWindow):
         self.settings_host = QWidget()
         sl = QVBoxLayout(self.settings_host)
         sl.setContentsMargins(0, 0, 0, 0)
-        for page in (self.config_page, self.log_view, self.settings_host):
+        self.klipper_page = KlipperPage(self.config.klipper)
+        self.klipper_page.changed.connect(self._config_edited)
+        self.klipper_page.toggleRequested.connect(lambda: self.controller.klipper_mode("toggle"))
+        self.klipper_page.testRequested.connect(
+            lambda printer: self.controller.call_soon(
+                lambda: self.controller.klipper.test_connection(
+                    printer, self.klipper_page.testFinished.emit
+                )
+            )
+        )
+        self._apply_klipper_state()
+        for page in (self.config_page, self.klipper_page, self.log_view, self.settings_host):
             self.pages.addWidget(page)
         v.addWidget(self.pages, 1)
         return main
@@ -498,7 +528,10 @@ class MainWindow(QMainWindow):
         )
         self.device_view = DeviceView()
         self.device_view.keySelected.connect(self._select_key)
+        self.device_view.controlSelected.connect(self._select_control)
         self.device_view.set_display_mode(self.config.settings.device.display_mode)
+        self.device_view.set_controls_visible(self.config.settings.device.controls)
+        self.device_view.set_screen_type(self.config.settings.device.screen)
 
         self.profile_editor = ProfileEditor(self._running_processes)
         self.profile_editor.set_default_handlers(
@@ -506,12 +539,25 @@ class MainWindow(QMainWindow):
         )
         self.profile_editor.changed.connect(self._config_edited)
         self.profile_editor.renameRequested.connect(self._do_rename)
+        self.profile_editor.set_leds_available(self.config.settings.device.leds_available)
         self.key_editor = KeyEditor(context)
         self.key_editor.changed.connect(self._binding_edited)
         self.key_editor.closeRequested.connect(lambda: self._select_key(None))
+        self.encoder_editor = EncoderEditor(context)
+        self.encoder_editor.changed.connect(self._binding_edited)
+        self.encoder_editor.closeRequested.connect(lambda: self._select_key(None))
+        self.slider_editor = SliderEditor(context)
+        self.slider_editor.changed.connect(self._binding_edited)
+        self.slider_editor.closeRequested.connect(lambda: self._select_key(None))
         self.stack = QStackedWidget()
-        for w in (self.profile_editor, self.key_editor):
-            self.stack.addWidget(w)
+        panels: tuple[QWidget, ...] = (
+            self.profile_editor,
+            self.key_editor,
+            self.encoder_editor,
+            self.slider_editor,
+        )
+        for panel in panels:
+            self.stack.addWidget(panel)
 
         card = frame("card")
         ch = QHBoxLayout(card)
@@ -544,9 +590,12 @@ class MainWindow(QMainWindow):
 
     def _go(self, page: str) -> None:
         self._page = page
-        widget = {"config": self.config_page, "log": self.log_view, "settings": self.settings_host}[
-            page
-        ]
+        widget = {
+            "config": self.config_page,
+            "klipper": self.klipper_page,
+            "log": self.log_view,
+            "settings": self.settings_host,
+        }[page]
         self.pages.setCurrentWidget(widget)
         self.nav_buttons[page].setChecked(True)
         self._update_crumb()
@@ -555,7 +604,8 @@ class MainWindow(QMainWindow):
         if self._page == "config":
             self.crumb.setText(f"{tr('Profile')} / {self.current_profile.name}")
         else:
-            self.crumb.setText(tr("Dziennik") if self._page == "log" else tr("Ustawienia"))
+            names = {"log": "Dziennik", "klipper": "Klipper"}
+            self.crumb.setText(tr(names.get(self._page, "Ustawienia")))
 
     def _set_language(self, lang: str) -> None:
         if lang == i18n.language():
@@ -643,10 +693,28 @@ class MainWindow(QMainWindow):
         )
         self.device_view.set_profile(profile)
         self._update_crumb()
-        self._select_key(self.current_key)
+        if self.current_control is not None:
+            self._select_control(self.current_control)
+        else:
+            self._select_key(self.current_key)
+
+    def _select_control(self, name: str) -> None:
+        """Pokrętło ("e1", "e2") albo suwak ("slider") – panel edycji po prawej."""
+        self.current_key = None
+        self.current_control = name
+        self.device_view.select_control(name)
+        profile = self.current_profile
+        if name == "slider":
+            self.slider_editor.bind(profile.slider)
+            self.stack.setCurrentWidget(self.slider_editor)
+        else:
+            index = int(name[1:])
+            self.encoder_editor.bind(index, profile.encoders[index])
+            self.stack.setCurrentWidget(self.encoder_editor)
 
     def _select_key(self, key: int | None) -> None:
         self.current_key = key
+        self.current_control = None
         self.device_view.select(key)
         profile = self.current_profile
         if key is None:
@@ -790,14 +858,24 @@ class MainWindow(QMainWindow):
         """Strona ustawień (formularz budowany od nowa przy każdym otwarciu)."""
         if self._settings_dialog is not None:
             self._settings_dialog.deleteLater()
-        dialog = SettingsDialog(self.config.settings, list_all_ports, self._device_action)
+        dialog = SettingsDialog(
+            self.config.settings,
+            list_all_ports,
+            self._device_action,
+            on_leds_preview=self.controller.preview_leds,
+        )
         dialog.embed()
         dialog.accepted.connect(lambda: self._settings_accepted(dialog))
-        dialog.rejected.connect(lambda: self._go("config"))
+        dialog.rejected.connect(lambda: self._settings_rejected(dialog))
         self.settings_host.layout().addWidget(dialog)
         dialog.show()
         self._settings_dialog = dialog
         self._go("settings")
+
+    def _settings_rejected(self, dialog: SettingsDialog) -> None:
+        if dialog.leds_previewed:
+            self.controller.restore_leds()  # podgląd LED bez zapisu – wracają zapisane
+        self._go("config")
 
     def _settings_accepted(self, dialog: SettingsDialog) -> None:
         self._apply_app_settings()
@@ -838,8 +916,8 @@ class MainWindow(QMainWindow):
             self,
             f"{tr('O programie')} {APP_NAME}",
             f"<b>{APP_NAME}</b> {__version__}<br>"
-            + tr('Macropad 2×4 (Kailh Choc) z ekranem OLED 2,42".')
-            + "<br>Firmware: Arduino Pro Micro (ATmega32U4).",
+            + tr('Macropad 2×4 (Kailh Choc) z ekranem OLED 2,42" albo LCD 2".')
+            + "<br>Firmware: Arduino Pro Micro (ATmega32U4), ChocPilot v0 (STM32F072).",
         )
 
     # ------------------------------------------------------------------ zdarzenia kontrolera
@@ -852,10 +930,46 @@ class MainWindow(QMainWindow):
         connected, info, port = self._connection
         status = "connected" if connected else "disconnected"
         self.status_dot.setPixmap(dot_pixmap(STATUS_COLORS[status], 10))
+        if (
+            connected
+            and info is not None
+            and info.encoder
+            and not self.config.settings.device.controls
+        ):
+            # Pierwsza płytka z pokrętłami (ChocPilot v0) – od teraz widać pokrętła i suwak.
+            self.config.settings.device.controls = True
+            self.device_view.set_controls_visible(True)
+            self._config_edited()
+        if (
+            connected
+            and info is not None
+            and info.leds
+            and not self.config.settings.device.leds_available
+        ):
+            # Pierwsza płytka z diodami LED – od teraz widać ustawienia podświetlenia.
+            self.config.settings.device.leds_available = True
+            self.profile_editor.set_leds_available(True)
+            self._config_edited()
+        if (
+            connected
+            and info is not None
+            and list(info.savers) != self.config.settings.device.savers_available
+        ):
+            # Lista animacji wygaszacza z płytki – do wyboru w ustawieniach urządzenia.
+            self.config.settings.device.savers_available = list(info.savers)
+            self._config_edited()
+        if connected and info is not None and info.screen != self.config.settings.device.screen:
+            # Inny rodzaj ekranu niż ostatnio (np. LCD ChocPilot v0) – podgląd jak na płytce.
+            self.config.settings.device.screen = info.screen  # type: ignore[assignment]
+            self.device_view.set_screen_type(info.screen)
+            self._config_edited()
         if connected and info is not None:
             self.status_text.setText(f"{tr('Połączono')} · {port}")
             self.status_board.setText(f"{tr('Płytka')}: {info.board_name}")
-            self.status_fw.setText(f"Firmware: {info.fw} · OLED: {info.oled_status}")
+            if info.screen == "lcd":
+                self.status_fw.setText(f"Firmware: {info.fw} · LCD 320×240")
+            else:
+                self.status_fw.setText(f"Firmware: {info.fw} · OLED: {info.oled_status}")
             if info.has_diag and info.oled_addr is None:
                 self.status_fw.setStyleSheet(
                     f"font-size: 8.5pt; color: {theme.tokens()['danger']}; font-weight: 600;"
@@ -895,6 +1009,15 @@ class MainWindow(QMainWindow):
         self.pause_switch.updateGeometry()
         self.pause_switch.blockSignals(False)
         self.paused_banner.setVisible(paused)
+
+    def _on_klipper_changed(self, active: bool, printer: str, status: object) -> None:
+        self._klipper_state = (active, printer, status)
+        self._apply_klipper_state()
+
+    def _apply_klipper_state(self) -> None:
+        active, printer, status = getattr(self, "_klipper_state", (False, "", None))
+        self.klipper_banner.setVisible(active)
+        self.klipper_page.set_state(active, printer, status)  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------ okno
 

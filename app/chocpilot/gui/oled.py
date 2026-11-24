@@ -238,34 +238,68 @@ def render(screen: Screen) -> QImage:
 
 
 class OledView(QLabel):
-    """Powiększony podgląd ekranu (piksele skalowane bez wygładzania)."""
+    """Powiększony podgląd ekranu urządzenia (piksele skalowane bez wygładzania).
 
-    def __init__(self, scale: int = 3, parent: QWidget | None = None) -> None:
+    screen_type: "oled" – SSD1309 128×64 (Pro Micro), "lcd" – kolorowy LCD 320×240 (ChocPilot v0).
+    scale = powiększenie OLED; LCD jest pokazywany w skali lcd_scale.
+    """
+
+    def __init__(
+        self,
+        scale: int = 3,
+        parent: QWidget | None = None,
+        screen_type: str = "oled",
+        lcd_scale: int = 1,
+    ) -> None:
         super().__init__(parent)
-        self._scale = scale
-        self.setFixedSize(QSize(WIDTH * scale + 8, HEIGHT * scale + 8))
+        self._oled_scale = scale
+        self._lcd_scale = lcd_scale
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet("background:#000; border:2px solid #222; border-radius:4px;")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._last: Screen | None = None
-        self.show_screen(Screen(kind="offline"))
+        self.screen_type = ""
+        self.set_screen_type(screen_type)
+
+    def set_screen_type(self, screen_type: str) -> None:
+        screen_type = "lcd" if screen_type == "lcd" else "oled"
+        if screen_type == self.screen_type:
+            return
+        self.screen_type = screen_type
+        w, h = self._size()
+        self.setFixedSize(QSize(w + 8, h + 8))
+        last, self._last = self._last, None
+        self.show_screen(last or Screen(kind="offline"))
+
+    def _size(self) -> tuple[int, int]:
+        if self.screen_type == "lcd":
+            from . import lcd
+
+            return lcd.WIDTH * self._lcd_scale, lcd.HEIGHT * self._lcd_scale
+        return WIDTH * self._oled_scale, HEIGHT * self._oled_scale
 
     def show_screen(self, screen: Screen) -> None:
         if screen == self._last:
             return
         self._last = screen
-        image = render(screen)
+        if self.screen_type == "lcd":
+            from . import lcd
+
+            image = lcd.render(screen)
+        else:
+            image = render(screen)
         if screen.kind != "off":
-            # jasność OLED → przyciemnienie podglądu
+            # jasność (OLED) / podświetlenie (LCD) → przyciemnienie podglądu
             level = 0.45 + 0.55 * (screen.brightness / 255)
             if level < 0.99:
                 painter = QPainter(image)
                 painter.fillRect(image.rect(), QColor(0, 0, 0, int(255 * (1 - level))))
                 painter.end()
+        w, h = self._size()
         pix = QPixmap.fromImage(
             image.scaled(
-                WIDTH * self._scale,
-                HEIGHT * self._scale,
+                w,
+                h,
                 Qt.AspectRatioMode.IgnoreAspectRatio,
                 Qt.TransformationMode.FastTransformation,
             )

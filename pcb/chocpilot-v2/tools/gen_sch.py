@@ -1,4 +1,4 @@
-"""Generuje chocpilot-v2.kicad_sch z design.py.
+"""Generuje chocpilot-v0.kicad_sch z design.py.
 
 Każdy pin dostaje krótki odcinek przewodu zakończony etykietą sieci (sygnały) albo
 symbolem zasilania (GND, +3V3, +5V, VBUS). Piny niepodłączone dostają znacznik „no connect”.
@@ -11,11 +11,11 @@ import uuid
 
 sys.path.insert(0, os.path.dirname(__file__))
 import design  # noqa: E402
+from kicad_env import SYMDIR  # noqa: E402
 from sexpr import Sym, dump, find, find1, parse  # noqa: E402
 
-SYMDIR = '/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols/'
-OUT = os.path.join(os.path.dirname(__file__), '..', 'chocpilot-v2.kicad_sch')
-PROJECT = 'chocpilot-v2'
+OUT = os.path.join(os.path.dirname(__file__), '..', 'chocpilot-v0.kicad_sch')
+PROJECT = 'chocpilot-v0'
 POWER_NETS = {'GND': 'power:GND', '+3V3': 'power:+3V3', '+5V': 'power:+5V', 'VBUS': 'power:VBUS'}
 STUB = 2.54
 
@@ -35,7 +35,7 @@ def lib_symbol(lib_id):
     """Zwraca spłaszczony symbol biblioteczny nazwany pełnym lib_id."""
     lib, name = lib_id.split(':')
     if lib not in _libs:
-        root = parse(open(SYMDIR + lib + '.kicad_sym').read())
+        root = parse(open(SYMDIR + lib + '.kicad_sym', encoding='utf-8').read())
         _libs[lib] = {s[1]: s for s in find(root, 'symbol')}
     syms = _libs[lib]
 
@@ -104,9 +104,8 @@ def _sch_layout():
         'R3': (190.5, 129.54),
         'Y1': (165.1, 152.4), 'C13': (154.94, 165.1), 'C14': (175.26, 165.1),
         'SW1': (292.1, 104.14), 'SW2': (292.1, 116.84), 'J3': (325.12, 104.14),
-        # OLED
-        'JP1': (264.16, 50.8), 'C15': (281.94, 63.5), 'R4': (292.1, 63.5), 'R5': (302.26, 63.5),
-        'J2': (325.12, 50.8),
+        # ekran LCD
+        'C15': (281.94, 63.5), 'J2': (325.12, 50.8),
         # enkodery, suwak
         'ENC1': (365.76, 55.88), 'ENC2': (365.76, 83.82), 'RV1': (360.68, 114.3), 'C16': (381.0, 114.3),
         # konwerter poziomu LED
@@ -114,7 +113,8 @@ def _sch_layout():
     }
     for i in range(8):
         row, col = divmod(i, 4)
-        pos['S%d' % (i + 1)] = (35.56 + col * 27.94, 124.46 + row * 22.86)
+        pos['S%d' % (i + 1)] = (35.56 + col * 27.94, 124.46 + row * 33.02)
+        pos['D%d' % (i + 1)] = (35.56 + col * 27.94, 137.16 + row * 33.02)
     for i in range(design.N_LED):
         x, y = 38.1 + (i % 6) * 43.18, 215.9 + (i // 6) * 35.56
         pos['L%d' % (i + 1)] = (x, y)
@@ -304,9 +304,9 @@ def main():
     for s, x, y in [
         ('USB-C, ochrona ESD, bezpiecznik, LDO 3,3 V', 22.86, 38.1),
         ('MCU STM32F072CBT6: odsprzęganie, kwarc 8 MHz (opcja)', 142.24, 81.28),
-        ('Złącze OLED 2,42" I²C (SSD1309) i wybór zasilania modułu', 251.46, 33.02),
+        ('Złącze ekranu LCD 2" SPI (Waveshare WSH-17344, ST7789V 240×320), kabel PH2.0', 251.46, 33.02),
         ('Enkodery EC11 i suwak 45 mm', 340.36, 38.1),
-        ('Klawisze Kailh Choc V2 (hotswap): bezpośrednio do MCU, podciąganie wewnętrzne', 22.86, 111.76),
+        ('Klawisze Kailh Choc V2 (lutowane THT): matryca 2×4 COL2ROW, dioda 1N4148W przy każdym', 22.86, 111.76),
         ('RESET / BOOT0 (od spodu) i SWD', 279.4, 93.98),
         ('Konwerter poziomu danych LED 3,3 → 5 V', 279.4, 134.62),
         ('LED WS2812B na spodzie płytki (łańcuch L1 → L12), 100 nF przy każdej', 22.86, 198.12),
@@ -317,17 +317,17 @@ def main():
 
     sch = [Sym('kicad_sch'), [Sym('version'), 20260306], [Sym('generator'), 'eeschema'],
            [Sym('generator_version'), '10.0'], [Sym('uuid'), ROOT_UUID], [Sym('paper'), 'A3'],
-           [Sym('title_block'), [Sym('title'), 'ChocPilot v2'], [Sym('date'), '2026-10-29'],
-            [Sym('rev'), '2.0'], [Sym('comment'), 1, 'Makropad 2×4 Kailh Choc V2, OLED 2,42" I²C, 2× EC11, suwak, 12× WS2812B'],
+           [Sym('title_block'), [Sym('title'), 'ChocPilot v0'], [Sym('date'), '2026-11-04'],
+            [Sym('rev'), '0'], [Sym('comment'), 1, 'Makropad 2×4 Kailh Choc V2, LCD 2" SPI ST7789V, 2× EC11, suwak, 12× WS2812B'],
             [Sym('comment'), 2, 'MCU STM32F072CBT6 (LQFP-48), USB-C, LDO TPS73633'],
-            [Sym('comment'), 3, 'Wygenerowano: pcb/chocpilot-v2/tools/gen_sch.py (źródło: design.py)']],
+            [Sym('comment'), 3, 'Wygenerowano: pcb/chocpilot-v0/tools/gen_sch.py (źródło: design.py)']],
            [Sym('lib_symbols')] + [lib_cache[k] for k in sorted(lib_cache)]]
     sch += items
     sch.append([Sym('sheet_instances'), [Sym('path'), '/', [Sym('page'), '1']]])
     sch.append([Sym('embedded_fonts'), Sym('no')])
     # lib_symbols trzeba znać przed zapisem – place_symbol wypełnił lib_cache
     sch[7] = [Sym('lib_symbols')] + [lib_cache[k] for k in sorted(lib_cache)]
-    with open(OUT, 'w') as f:
+    with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
         f.write(dump(sch) + '\n')
     print('zapisano', os.path.normpath(OUT), len(items), 'elementów')
 

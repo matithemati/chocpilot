@@ -25,6 +25,25 @@ enum class CommandType : uint8_t {
   Reboot,
   TestMode,
   Debug,
+  Leds,
+  Time,
+  Icon,
+};
+
+// Czas lokalny z aplikacji (zegar na wygaszaczu LCD).
+// Kawałek ikony klawisza (komenda icon): data[0..len) zapisywane od offset; clear = usuń ikonę.
+struct IconChunk {
+  uint8_t key = 0;  // 1–8
+  bool clear = false;
+  uint16_t offset = 0;
+  uint8_t len = 0;
+  uint8_t data[kIconChunkMax] = {0};
+};
+
+struct TimeOfDay {
+  uint8_t hour = 0;
+  uint8_t minute = 0;
+  uint8_t second = 0;
 };
 
 struct DisplayCommand {
@@ -56,11 +75,30 @@ struct SettingsPatch {
     kFlip = 1 << 2,
     kDebounce = 1 << 3,
     kOledAddr = 1 << 4,
+    kSaver = 1 << 5,
   };
   uint16_t mask = 0;
   Settings values;
+  char saver[kSaverNameBuf] = {0};  // kSaver: animacja wygaszacza ("" / "off" = wygaszony ekran)
 
   void applyTo(Settings& s) const;
+};
+
+// Częściowa zmiana podświetlenia (komenda leds). save = false: tylko do restartu / rozłączenia
+// (np. kolor profilu), bez zapisu do pamięci.
+struct LedPatch {
+  enum Field : uint8_t {
+    kMode = 1 << 0,
+    kColor = 1 << 1,
+    kBrightness = 1 << 2,
+    kSpeed = 1 << 3,
+    kReact = 1 << 4,
+  };
+  uint8_t mask = 0;
+  bool save = true;
+  LedSettings values;
+
+  void applyTo(LedSettings& s) const;
 };
 
 struct FallbackPatch {
@@ -80,6 +118,11 @@ struct Command {
   FlashCommand flash;
   SettingsPatch settings;
   FallbackPatch fallback;
+  LedPatch leds;
+  TimeOfDay time;
+#if !defined(CHOCPILOT_NO_ICONS)
+  IconChunk icon;
+#endif
   bool flag = false;  // reboot.bootloader / test_mode.enable / debug.enable
 };
 
@@ -109,10 +152,24 @@ struct I2cDiag {
   bool swapped = false;  // ekran znaleziony dopiero po zamianie SDA i SCL
 };
 
-// diag == nullptr → bez pól diagnostycznych.
+// diag == nullptr → bez pól diagnostycznych. encoder: płytka ma pokrętła (ChocPilot v0).
+// leds: liczba diod podświetlenia (0 = brak, pole leds pominięte). savers: nazwy animacji
+// wygaszacza (pole savers tylko, gdy saverCount > 0).
 size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool online,
-                  const I2cDiag* diag = nullptr);
+                  const I2cDiag* diag = nullptr, bool encoder = false, uint8_t leds = 0,
+                  const char* const* savers = nullptr, uint8_t saverCount = 0,
+                  uint8_t iconSize = 0);
+
+// Dekoduje base64 (bez białych znaków) z src[0..srcLen) do dst; zwraca liczbę bajtów albo −1
+// przy błędzie / braku miejsca.
+int decodeBase64(const char* src, size_t srcLen, uint8_t* dst, size_t cap);
 size_t buildKey(char* buf, size_t cap, uint8_t key, bool down, uint32_t t);
+// Pokrętło `index` (1, 2) obrócone o `delta` zatrzasków (+ w prawo).
+size_t buildEncoder(char* buf, size_t cap, uint8_t index, int16_t delta, uint32_t t);
+// Przycisk pokrętła `index` wciśnięty / zwolniony (po debounce).
+size_t buildEncoderKey(char* buf, size_t cap, uint8_t index, bool down, uint32_t t);
+// Położenie suwaka 0–100 (dół – góra).
+size_t buildSlider(char* buf, size_t cap, uint8_t value, uint32_t t);
 size_t buildAck(char* buf, size_t cap, int32_t id);
 size_t buildError(char* buf, size_t cap, bool hasId, int32_t id, FlashText msg);
 size_t buildLog(char* buf, size_t cap, FlashText level, FlashText msg);

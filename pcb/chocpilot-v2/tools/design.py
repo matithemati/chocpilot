@@ -1,4 +1,4 @@
-"""ChocPilot v2 – jedno źródło prawdy dla schematu, PCB i BOM.
+"""ChocPilot v0 – jedno źródło prawdy dla schematu, PCB i BOM.
 
 Każdy element: oznaczenie, symbol z biblioteki KiCad, footprint, mapa pin → sieć
 (None = pin niepodłączony, na schemacie znacznik „no connect”), położenie na płytce
@@ -9,25 +9,30 @@ Uruchamiane z gen_sch.py, gen_pcb.py i gen_bom.py – nie zawiera logiki generuj
 """
 
 # ---------------------------------------------------------------- geometria płytki
-BOARD_W = 110.0
+RIGHT_DX = 4.0                    # prawa kolumna (suwak, USB-C, LED, otwory) dalej od klawiszy
+BOARD_W = 110.0 + RIGHT_DX
 BOARD_H = 93.0
 BOARD_ORIGIN = (50.0, 50.0)       # lewy górny róg płytki we współrzędnych KiCad
 CORNER_R = 2.0
 
-XC = BOARD_W / 2                  # środek ekranu i rzędów klawiszy (oś symetrii)
+XC = BOARD_W / 2                  # środek płytki
 YM = BOARD_H / 2                  # środek ekranu
 PITCH = 19.05                     # raster klawiszy (Choc V2 = keycapy MX)
 ROW_DY = 34.0                     # środek rzędu ↔ środek ekranu (rzędy 68 mm od siebie)
 Y_TOP = YM - ROW_DY               # 12.5
 Y_BOT = YM + ROW_DY               # 80.5
-KEY_X = [XC + (i - 1.5) * PITCH for i in range(4)]
+# Oś rzędów klawiszy i ekranu. Płytka jest o RIGHT_DX szersza w prawo, a suwak, USB-C,
+# prawe LED i otwory przesunięte o RIGHT_DX: keycap K4/K8 (do x = 92,6) ma ok. 4,7 mm
+# odstępu od korpusu i nakładki suwaka (od x = 97,25).
+KEY_XC = 55.0
+KEY_X = [KEY_XC + (i - 1.5) * PITCH for i in range(4)]
 
-OLED_W, OLED_H = 70.10, 48.10     # moduł ShengYang 2,42" 4-pin I²C
-OLED_PIN_Y = YM - OLED_H / 2 + 2.0  # piny modułu: środek górnej krawędzi, ~2 mm od niej
+LCD_W, LCD_H = 58.0, 35.0         # Waveshare 2inch LCD Module (TME WSH-17344) – mocowany w obudowie
+LCD_HDR = (86.5, 37.61)           # pin 1 listwy J2 (pionowo, w dół) – na prawo od MCU, przy pinach ekranu
 
 ENC_X = 12.5                      # oś enkoderów (lewa kolumna)
 ENC_Y = [YM - 12.0, YM + 12.0]
-SLIDER_X = 95.5                   # pin 1 PTA4543 (obrót 90°); korpus poza obrysem modułu OLED
+SLIDER_X = 97.25 + RIGHT_DX       # oś dźwigni suwaka ALPS RS45111 (pionowo); korpus poza obrysem ekranu
 
 MCU_X, MCU_Y = 62.0, 46.0
 
@@ -35,25 +40,26 @@ MCU_X, MCU_Y = 62.0, 46.0
 # ---------------------------------------------------------------- biblioteki
 FP_R = 'Resistor_SMD:R_0805_2012Metric_Pad1.20x1.40mm_HandSolder'
 FP_C = 'Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder'
-FP_SW = 'chocpilot:SW_Kailh_Choc_V1V2_Hotswap_1u'
+FP_SW = 'chocpilot:SW_Kailh_Choc_V1V2_1u'
+FP_D = 'Diode_SMD:D_SOD-123'
 FP_LED = 'LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm'
 FP_BTN = 'Button_Switch_SMD:SW_SPST_PTS645Sx43SMTR92'
 FP_ENC = 'Rotary_Encoder:RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm'
 FP_HOLE = 'MountingHole:MountingHole_3.2mm_M3'
 
-# Numery TME sprawdzone w katalogu tme.eu 2026-10-29 (patrz docs/BOM.md).
+# Numery TME sprawdzone w katalogu tme.eu 2026-11-04: na stanie i bez oznaczenia „Hardly
+# available product” (patrz bom/BOM.md).
 PASSIVE = {
     # wartość: (producent, numer producenta, symbol TME)
     'R5.1k': ('Yageo', 'RC0805FR-075K1L', 'RC0805FR-075K1'),
     'R10k': ('Yageo', 'RC0805FR-0710KL', 'RC0805FR-0710K'),
-    'R4.7k': ('Yageo', 'RC0805FR-074K7L', 'RC0805FR-074K7'),
     'R330': ('Yageo', 'RC0805FR-07330RL', 'RC0805FR-07330R'),
-    'C100n': ('Samsung', 'CL21B104KBCNNNC', 'CL21B104KBCNNNC'),
-    'C10n': ('Samsung', 'CL21B103KBANNNC', 'CL21B103KBANNNC'),
-    'C1u': ('Samsung', 'CL21B105KBFNNNE', 'CL21B105KBFNNNE'),
-    'C4.7u': ('Samsung', 'CL21A475KAQNNNE', 'CL21A475KAQNNNE'),
-    'C10u': ('Samsung', 'CL21A106KAYNNNE', 'CL21A106KAYNNNE'),
-    'C27p': ('Samsung', 'CL21C270JBANNNC', 'CL21C270JBANNNC'),
+    'C100n': ('KYOCERA AVX', 'KAM21BR71H104KT', 'KAM21BR71H104KT'),   # 50 V X7R
+    'C10n': ('KYOCERA AVX', 'KGM21NR72A103KT', 'KGM21NR72A103KT'),    # 100 V X7R
+    'C1u': ('KYOCERA AVX', 'KAM21KR71E105KU', 'KAM21KR71E105KU'),     # 25 V X7R
+    'C4.7u': ('KYOCERA AVX', 'KGM21AR71C475KU', 'KGM21AR71C475KU'),   # 16 V X7R
+    'C10u': ('KEMET', 'C0805C106M8RACTU', 'C0805C106M8RACTU'),        # 10 V X7R ±20%
+    'C27p': ('KYOCERA AVX', '08055A270GAT2A', '08055A270GAT2A'),      # 50 V C0G ±2%
 }
 
 parts = []
@@ -75,25 +81,29 @@ def passive(ref, kind, value, net1, net2, pcb, desc=''):
 
 
 # ================================================================ USB i zasilanie
-UX = 103.5                       # oś złącza USB-C (górna krawędź, prawy róg)
+UX = 103.5 + RIGHT_DX            # oś złącza USB-C (górna krawędź, prawy róg)
+# Przód gniazda wystaje poza krawędź płytki o USB_OVERHANG (łatwiejszy dostęp przez ściankę
+# obudowy). Limit ok. 1,4 mm: przednie kołki obudowy (lokalnie y = 1,075, pad 1,8 mm) muszą
+# zostać na płytce z odstępem miedź–krawędź.
+USB_OVERHANG = 1.2
 part('J1', 'Connector:USB_C_Receptacle_USB2.0_16P', 'USB-C',
      'Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal',
      {'A1': 'GND', 'A12': 'GND', 'B1': 'GND', 'B12': 'GND',
       'A4': 'VBUS', 'A9': 'VBUS', 'B4': 'VBUS', 'B9': 'VBUS',
       'A5': 'CC1', 'B5': 'CC2', 'A6': 'USB_CONN_DP', 'B6': 'USB_CONN_DP',
-      'A7': 'USB_CONN_DN', 'B7': 'USB_CONN_DN', 'A8': None, 'B8': None, 'SH': 'GND'}, pcb=(UX, 3.675, 180, 'F'),
+      'A7': 'USB_CONN_DN', 'B7': 'USB_CONN_DN', 'A8': None, 'B8': None, 'SH': 'GND'}, pcb=(UX, 3.675 - USB_OVERHANG, 180, 'F'),
      bom=dict(mfr='GCT', mpn='USB4105-GF-A', tme='USB4105-GF-A', pkg='SMD 16P + THT'),
      desc='USB-C 2.0, wlutowane 16 padów SMD (raster 0,5) + 4 kołki THT')
 part('F1', 'Device:Polyfuse', '500mA', 'Fuse:Fuse_1206_3216Metric_Pad1.42x1.75mm_HandSolder',
      {'1': 'VBUS', '2': '+5V'}, pcb=(UX, 12.5, 0, 'F'),
      bom=dict(mfr='Bourns', mpn='MF-NSMF050-2', tme='MF-NSMF050-2', pkg='1206'),
      desc='bezpiecznik polimerowy PTC 0,5 A (zadziałanie 1 A)')
-passive('R1', 'R', '5.1k', 'CC1', 'GND', pcb=(107.5, 12.5, 90, 'F'),
+passive('R1', 'R', '5.1k', 'CC1', 'GND', pcb=(107.5 + RIGHT_DX, 12.5, 90, 'F'),
         desc='CC1 → GND: urządzenie USB-C (Rd)')
-passive('R2', 'R', '5.1k', 'CC2', 'GND', pcb=(99.5, 12.5, 90, 'F'),
+passive('R2', 'R', '5.1k', 'CC2', 'GND', pcb=(99.5 + RIGHT_DX, 12.5, 90, 'F'),
         desc='CC2 → GND: urządzenie USB-C (Rd)')
 part('U3', 'Power_Protection:USBLC6-2SC6', 'USBLC6-2SC6', 'Package_TO_SOT_SMD:SOT-23-6_Handsoldering',
-     {'1': 'USB_CONN_DP', '6': 'USB_DP', '3': 'USB_CONN_DN', '4': 'USB_DN', '2': 'GND', '5': 'VBUS'}, pcb=(96.0, 11.5, 270, 'F'),
+     {'1': 'USB_CONN_DP', '6': 'USB_DP', '3': 'USB_CONN_DN', '4': 'USB_DN', '2': 'GND', '5': 'VBUS'}, pcb=(96.0 + RIGHT_DX, 11.5, 270, 'F'),
      bom=dict(mfr='STMicroelectronics', mpn='USBLC6-2SC6', tme='USBLC6-2SC6', pkg='SOT-23-6'),
      desc='ochrona ESD linii D+/D−')
 part('U2', 'Regulator_Linear:TPS73633DBV', 'TPS73633DBVR', 'Package_TO_SOT_SMD:SOT-23-5_HandSoldering',
@@ -116,16 +126,17 @@ mcu_pins = {
     '8': 'GND', '23': 'GND', '35': 'GND', '47': 'GND',
     '7': 'NRST', '44': 'BOOT0', '5': 'OSC_IN', '6': 'OSC_OUT',
     '32': 'USB_DN', '33': 'USB_DP', '34': 'SWDIO', '37': 'SWCLK',
-    '42': 'OLED_SCL', '43': 'OLED_SDA',
-    '46': 'K1', '45': 'K2', '41': 'K3', '40': 'K4',
-    '14': 'K5', '15': 'K6', '20': 'K7', '21': 'K8',
+    # ekran: SPI1 (AF0) PB3 = SCK, PB5 = MOSI; sterowanie z prawej strony MCU (bliżej J2),
+    # PA8 = TIM1_CH1 (AF2) – PWM podświetlenia (wejście BL modułu)
+    '39': 'LCD_SCK', '41': 'LCD_MOSI', '31': 'LCD_CS', '30': 'LCD_DC', '27': 'LCD_RST', '29': 'LCD_BL',
+    # matryca klawiszy 2×4 (COL2ROW): wiersze = wyjścia, kolumny = wejścia z podciąganiem
+    '46': 'COL0', '43': 'COL1', '14': 'COL2', '20': 'COL3', '18': 'ROW0', '22': 'ROW1',
     '10': 'ENC1_A', '11': 'ENC1_B', '12': 'ENC1_SW',
     '16': 'ENC2_A', '17': 'ENC2_B', '13': 'ENC2_SW',
     '19': 'SLIDER', '28': 'LED_DATA_3V3',
-    # wolne: PC13–PC15, PB0, PB3, PA15, PB11–PB14, PA8–PA10
-    '2': None, '3': None, '4': None, '18': None, '22': None, '25': None, '26': None,
-    '27': None, '29': None, '30': None, '31': None, '38': None, '39': None,
 }
+for _n in range(1, 49):              # pozostałe piny wolne (na schemacie „no connect”)
+    mcu_pins.setdefault(str(_n), None)
 part('U1', 'MCU_ST_STM32F0:STM32F072CBTx', 'STM32F072CBT6', 'Package_QFP:LQFP-48_7x7mm_P0.5mm',
      mcu_pins, pcb=(MX, MY, 0, 'F'),
      bom=dict(mfr='STMicroelectronics', mpn='STM32F072CBT6', tme='STM32F072CBT6', pkg='LQFP-48 0,5 mm'),
@@ -157,17 +168,16 @@ part('J3', 'Connector_Generic:Conn_01x05', 'SWD', 'Connector_PinHeader_2.54mm:Pi
      bom=dict(mfr='Connfly', mpn='DS1021-1*5SF11-B', tme='ZL201-05G', pkg='THT 2,54 mm'), dnp=True,
      desc='SWD do debugowania (opcjonalne, pady bez listwy)')
 
-# ================================================================ OLED
-part('J2', 'Connector_Generic:Conn_01x04', 'OLED I2C', 'Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical',
-     {'1': 'GND', '2': 'OLED_VCC', '3': 'OLED_SCL', '4': 'OLED_SDA'}, pcb=(XC - 3.81, OLED_PIN_Y, 90, 'F'),
-     bom=dict(mfr='Connfly', mpn='DS1023-1*4S21', tme='ZL262-4SG', pkg='THT 2,54 mm gniazdo'),
-     desc='złącze modułu OLED 2,42": GND, VCC, SCL, SDA (jak nadruk modułu)')
-part('JP1', 'Jumper:SolderJumper_3_Bridged12', 'OLED VCC', 'Jumper:SolderJumper-3_P1.3mm_Bridged12_RoundedPad1.0x1.5mm',
-     {'1': '+3V3', '2': 'OLED_VCC', '3': '+5V'}, pcb=(XC - 8.0, OLED_PIN_Y + 4.55, 0, 'F'),
-     desc='zasilanie OLED: 1–2 = 3,3 V (fabrycznie), 2–3 = 5 V')
-passive('C15', 'C', '10uF', 'OLED_VCC', 'GND', pcb=(XC - 8.0, OLED_PIN_Y + 0.55, 90, 'F'), desc='zasilanie OLED')
-passive('R4', 'R', '4.7k', '+3V3', 'OLED_SCL', pcb=(XC, OLED_PIN_Y + 4.55, 0, 'F'), desc='podciąganie SCL')
-passive('R5', 'R', '4.7k', '+3V3', 'OLED_SDA', pcb=(XC + 4.0, OLED_PIN_Y + 4.55, 0, 'F'), desc='podciąganie SDA')
+# ================================================================ ekran LCD SPI (ILI9341)
+# Moduł Waveshare 2inch LCD Module (TME WSH-17344: ST7789V, 240×320 IPS) jest przykręcony do
+# obudowy i połączony dołączonym kablem PH2.0 → żeńskie wtyki 2,54 mm z listwą J2; kolejność
+# pinów J2 = kolejność kabla (VCC, GND, DIN, CLK, CS, DC, RST, BL). Logika modułu = VCC, więc 3,3 V.
+part('J2', 'Connector_Generic:Conn_01x08', 'LCD SPI', 'Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical',
+     {'1': '+3V3', '2': 'GND', '3': 'LCD_MOSI', '4': 'LCD_SCK', '5': 'LCD_CS', '6': 'LCD_DC',
+      '7': 'LCD_RST', '8': 'LCD_BL'}, pcb=(LCD_HDR[0], LCD_HDR[1], 0, 'F'),
+     bom=dict(mfr='Connfly', mpn='DS1021-1*8SF11-B', tme='ZL201-08G', pkg='THT 2,54 mm'),
+     desc='złącze ekranu SPI: VCC, GND, DIN, CLK, CS, DC, RST, BL (kolejność jak kabel modułu)')
+passive('C15', 'C', '10uF', '+3V3', 'GND', pcb=(LCD_HDR[0], LCD_HDR[1] - 4.1, 0, 'F'), desc='zasilanie ekranu LCD')
 
 # ================================================================ enkodery i suwak
 for i, (y, net) in enumerate(zip(ENC_Y, ['ENC1', 'ENC2'])):
@@ -175,25 +185,44 @@ for i, (y, net) in enumerate(zip(ENC_Y, ['ENC1', 'ENC2'])):
          {'A': net + '_A', 'B': net + '_B', 'C': 'GND', 'S1': net + '_SW', 'S2': 'GND', 'MP': 'GND'}, pcb=(ENC_X - 7.5, y - 2.5, 0, 'F'),
          bom=dict(mfr='ALPS', mpn='EC11E15244G1', tme='EC11E15244G1', pkg='THT'),
          desc='enkoder EC11 z przyciskiem (15 imp./30 zatrzasków)')
-part('RV1', 'Device:R_Potentiometer_MountingPin', '10k', 'Potentiometer_THT:Potentiometer_Bourns_PTA4543_Single_Slide',
-     {'1': 'GND', '2': 'SLIDER', '3': '+3V3', 'MP': 'GND'}, pcb=(SLIDER_X, YM + 29.25, 90, 'F'),
-     bom=dict(mfr='Bourns', mpn='PTA4543-2015DPA103', tme='PTA45432015DPA10-0', pkg='THT',
-              amazon='Bourns PTA4543-2015DPB103 (liniowy)'),
-     desc='potencjometr suwakowy 45 mm, 10 kΩ (dół = GND, góra = 3,3 V)')
+# ALPS RS45111: oś dźwigni na linii otworów ustalających (lokalnie y = −1,875), środek skoku
+# lokalnie x = 25; obrót 90° → pin 1 na dole, pin 3 u góry
+part('RV1', 'Device:R_Potentiometer', '10k', 'chocpilot:Potentiometer_Alps_RS45111_Slide_45mm',
+     {'1': 'GND', '2': 'SLIDER', '3': '+3V3'}, pcb=(SLIDER_X + 1.875, YM + 25.0, 90, 'F'),
+     bom=dict(mfr='ALPS', mpn='RS45111A900F', tme='RS45111A900F', pkg='THT'),
+     desc='potencjometr suwakowy 45 mm, 10 kΩ liniowy (dół = GND, góra = 3,3 V)')
 passive('C16', 'C', '100nF', 'SLIDER', 'GND', pcb=(MX - 4.0, MY + 8.5, 90, 'F'),
         desc='filtr wejścia ADC suwaka')
 
 # ================================================================ klawisze
-SW_BOM = dict(mfr='Kailh', mpn='CPG135001S30 (gniazdo) + CPG1353 (Choc V2)', tme='—',
-              amazon='Kailh Choc hot-swap socket; Kailh Choc V2 switch', pkg='SMD (gniazdo)')
+# Matryca 2×4 COL2ROW (firmware/src/matrix.cpp): kolumna → przełącznik → dioda → wiersz, katoda
+# diody od strony wiersza. Kolumna = para sąsiednich klawiszy w jednym rzędzie (K1+K2, K3+K4,
+# K5+K6, K7+K8), wiersz 0 = klawisze wewnętrzne (K2, K3, K6, K7), wiersz 1 = zewnętrzne
+# (K1, K4, K5, K8) – przez środek płytki idą tylko 2 sieci (wiersze) zamiast 4 kolumn.
+# Numer klawisza w matrycy (wiersz, kolumna) → Kn: MATRIX_KEYS.
+MATRIX_KEYS = [[2, 3, 6, 7], [1, 4, 5, 8]]
+SW_BOM = dict(mfr='Kailh', mpn='CPG1353 (Choc V2)', tme='—',
+              amazon='Kailh Choc V2 switch', pkg='THT')
+D_BOM = dict(mfr='Vishay', mpn='1N4148W-E3-08', tme='1N4148W-E3-08', pkg='SOD-123')
+# dioda na spodzie obok pinu 2 przełącznika (lokalnie (5; −3,8)), między kołkiem V1 (5,5; 0)
+# a sąsiednim klawiszem; poza diodami LED przy krawędzi (lokalnie y = +7)
+D_LOCAL = (7.9, 2.6)
 for i in range(8):
     row, col = divmod(i, 4)
     x = KEY_X[col]
     y = Y_TOP if row == 0 else Y_BOT
-    rot = 180 if row == 0 else 0      # gniazda hotswap zawsze od strony ekranu
-    part('S%d' % (i + 1), 'Switch:SW_Push', 'K%d' % (i + 1), FP_SW,
-         {'1': 'K%d' % (i + 1), '2': 'GND'}, pcb=(x, y, rot, 'F'), bom=SW_BOM,
-         desc='Kailh Choc V2 w gnieździe hotswap')
+    rot = 180 if row == 0 else 0      # piny przełączników zawsze od strony ekranu
+    n = i + 1
+    mrow = next(r for r in range(2) if n in MATRIX_KEYS[r])
+    mcol = MATRIX_KEYS[mrow].index(n)
+    part('S%d' % n, 'Switch:SW_Push', 'K%d' % n, FP_SW,
+         {'1': 'COL%d' % mcol, '2': 'KD%d' % n}, pcb=(x, y, rot, 'F'), bom=SW_BOM,
+         desc='Kailh Choc V2 lutowany w płytkę (THT)')
+    s = -1 if rot == 180 else 1
+    part('D%d' % n, 'Device:D', '1N4148W', FP_D,
+         {'1': 'ROW%d' % mrow, '2': 'KD%d' % n},
+         pcb=(x + s * D_LOCAL[0], y + s * D_LOCAL[1], 90 if rot == 0 else 270, 'B'), bom=D_BOM,
+         desc='dioda matrycy klawisza K%d (katoda → wiersz)' % n)
 
 # ================================================================ LED (spód płytki)
 part('U4', '74xGxx:74AHCT1G125', 'SN74AHCT1G125DBVR', 'Package_TO_SOT_SMD:SOT-23-5_HandSoldering',
@@ -203,14 +232,14 @@ part('U4', '74xGxx:74AHCT1G125', 'SN74AHCT1G125DBVR', 'Package_TO_SOT_SMD:SOT-23
 passive('C17', 'C', '100nF', '+5V', 'GND', pcb=(75.0, 52.0, 0, 'F'), desc='U4')
 passive('R6', 'R', '330', 'LED_DATA_5V', 'LED_DIN', pcb=(79.5, 48.0, 90, 'F'),
         desc='rezystor szeregowy linii danych LED')
-passive('C18', 'C', '10uF', '+5V', 'GND', pcb=(100.0, 40.0, 90, 'B'), desc='+5V – bufor łańcucha LED')
+passive('C18', 'C', '10uF', '+5V', 'GND', pcb=(100.0 + RIGHT_DX, 40.0, 90, 'B'), desc='+5V – bufor łańcucha LED')
 
 # Kolejność w łańcuchu: prawy bok w dół, dolna krawędź w lewo, lewy bok w górę, górna w prawo.
 # (x, y, obrót LED, przesunięcie kondensatora dx, dy, obrót kondensatora). Obrót LED dobrany
 # tak, by DIN był od strony poprzedniej diody (na spodzie obrót jest lustrzany);
 # kondensator przy padzie VDD, z dala od otworów przełączników.
 LED_POS = [
-    (104.5, 28.0, 90, 0.5, 5.6, 0), (104.5, 65.0, 90, 0.5, 5.6, 0),
+    (104.5 + RIGHT_DX, 28.0, 90, 0.5, 5.6, 0), (104.5 + RIGHT_DX, 65.0, 90, 0.5, 5.6, 0),
     (KEY_X[3], 87.5, 0, -6.2, 1.9, 0), (KEY_X[2], 87.5, 0, -6.2, 1.9, 0),
     (KEY_X[1], 87.5, 0, -6.2, 1.9, 0), (KEY_X[0], 87.5, 0, -6.2, 1.9, 0),
     (6.0, 72.0, 270, -0.5, -5.6, 0), (6.0, 21.0, 270, -0.5, -5.6, 0),
@@ -224,14 +253,14 @@ for i, (x, y, rot, cdx, cdy, crot) in enumerate(LED_POS):
     dout = 'LED_D%d' % n if n < N_LED else None
     part('L%d' % n, 'LED:WS2812B', 'WS2812B', FP_LED,
          {'1': '+5V', '2': dout, '3': 'GND', '4': din}, pcb=(x, y, rot, 'B'),
-         bom=dict(mfr='Worldsemi', mpn='WS2812B-V5', tme='WS2812B-V5', pkg='5050 PLCC4',
+         bom=dict(mfr='Worldsemi', mpn='WS2812B-V6', tme='WS2812B-V6', pkg='5050 PLCC4',
                   amazon='WS2812B 5050 SMD chip (np. BTF-LIGHTING)'),
          desc='LED adresowalny RGB, spód płytki (podświetlenie blatu)')
     passive('C%d' % (18 + n), 'C', '100nF', '+5V', 'GND', pcb=(x + cdx, y + cdy, crot, 'B'),
             desc='odsprzęganie L%d' % n)
 
 # ================================================================ mechanika
-HOLES = [(6.5, 7.0), (106.5, 21.0), (6.0, 86.5), (104.5, 86.5)]
+HOLES = [(6.5, 7.0), (106.5 + RIGHT_DX, 21.0), (6.0, 86.5), (104.5 + RIGHT_DX, 86.5)]
 for i, (x, y) in enumerate(HOLES):
     part('H%d' % (i + 1), 'Mechanical:MountingHole', 'M3', FP_HOLE, {}, pcb=(x, y, 0, 'F'),
          bom=dict(mfr='—', mpn='—', tme='—', pkg='otwór Ø3,2'), desc='otwór montażowy M3')

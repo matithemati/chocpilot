@@ -7,6 +7,7 @@ z pełnym kodowaniem/dekodowaniem JSON (testuje też protokół).
 
 from __future__ import annotations
 
+import base64
 import logging
 import threading
 import time
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from . import protocol
+from . import leds, protocol, savers
 from .protocol import ProtocolError
 from .transport import ConnectionState, Transport
 
@@ -22,12 +23,20 @@ log = logging.getLogger("chocpilot.simulator")
 
 FW_VERSION = "1.0.0-sim"
 # Płytki z krótszym buforem odbioru (firmware CHOCPILOT_COMPACT) – limit zgłaszany w hello.
-BOARD_MAX_LINE = {"promicro": 272}
+BOARD_MAX_LINE = {"promicro": 272, "chocpilot_v0": 272}
+# Płytki z pokrętłami i suwakiem (encoder: true w hello).
+BOARDS_WITH_CONTROLS = {"chocpilot_v0"}
+# Liczba diod podświetlenia (leds w hello).
+BOARD_LEDS = {"chocpilot_v0": leds.LED_COUNT}
+# Płytki z ikonami klawiszy (icon w hello) – LCD.
+BOARD_ICONS = {"chocpilot_v0": 32}
+# Animacje wygaszacza (savers w hello) – płytki z LCD.
+BOARD_SAVERS = {"chocpilot_v0": savers.NAMES}
 
 
 @dataclass(frozen=True)
 class Screen:
-    """Co jest na ekranie OLED (do narysowania przez GUI)."""
+    """Co jest na ekranie urządzenia (do narysowania przez GUI: OLED albo LCD)."""
 
     kind: str  # splash | offline | idle | profile | grid | text | bar | flash | test | off
     title: str = ""
@@ -38,6 +47,14 @@ class Screen:
     key: int | None = None
     online: bool = False
     test_keys: tuple[bool, ...] = ()
+    # Tryb testu na LCD (ChocPilot v0): suma obrotów pokręteł, przyciski pokręteł, suwak 0–100.
+    saver: str = ""  # kind="saver": nazwa animacji wygaszacza
+    saver_ms: int = 0  # czas od startu animacji
+    clock: str = ""  # kind="saver": godzina HH:MM z aplikacji (pusto = zegar nieustawiony)
+    icons: tuple[bytes | None, ...] = ()  # kind="grid": kompletne ikony klawiszy (544 B) albo None
+    test_encoders: tuple[int, ...] = ()
+    test_encoder_keys: tuple[bool, ...] = ()
+    test_slider: int = 0
     flip: bool = False
     brightness: int = 128
 
@@ -54,6 +71,7 @@ class SimulatedDevice:
             "flip": False,
             "debounce_ms": 8,
             "oled_addr": 0x3C,
+            "saver": "off",
         }
     )
     fallback: dict[str, dict[str, Any]] = field(
@@ -77,6 +95,18 @@ class SimulatedDevice:
         self._last_activity = self._start
         self._pressed = [False] * protocol.KEY_COUNT
         self._test_mode = False
+        self._test_encoders = [0] * protocol.ENCODER_COUNT
+        self._encoder_down = [False] * protocol.ENCODER_COUNT
+        self._slider = 0
+        # Podświetlenie: zapisane (jak w EEPROM) i stosowane teraz (z kolorem profilu save:false).
+        self.leds_saved = leds.LedState()
+        self.leds_live = leds.LedState()
+        self._key_down_ms: dict[int, int] = {}
+        # Zegar z komendy time: (sekunda doby, czas symulatora w chwili ustawienia).
+        self._wall_clock: tuple[int, float] | None = None
+        # Ikony jak IconStore w firmware: bufor i liczba bajtów zapisanych po kolei.
+        self._icon_buf = [bytearray(protocol.ICON_BYTES) for _ in range(protocol.KEY_COUNT)]
+        self._icon_filled = [0] * protocol.KEY_COUNT
         self.debug = False
         self.hid_log: list[str] = []  # co zostałoby wysłane przez HID w trybie offline
 
@@ -101,13 +131,27 @@ class SimulatedDevice:
             brightness = int(self.settings["brightness"])
             if now - self._start < 1.5:
                 return Screen(kind="splash", flip=flip, brightness=brightness)
-            saver = int(self.settings["screensaver_s"])
-            if saver and not self._test_mode and now - self._last_activity >= saver:
+            saver_s = int(self.settings["screensaver_s"])
+            idle = now - self._last_activity
+            if saver_s and not self._test_mode and idle >= saver_s:
+                name = str(self.settings.get("saver", "off"))
+                if name in BOARD_SAVERS.get(self.board, ()):
+                    return Screen(
+                        kind="saver",
+                        saver=name,
+                        saver_ms=int((idle - saver_s) * 1000),
+                        clock=self._clock_text(now),
+                        flip=flip,
+                        brightness=brightness,
+                    )
                 return Screen(kind="off")
             if self._test_mode:
                 return Screen(
                     kind="test",
                     test_keys=tuple(self._pressed),
+                    test_encoders=tuple(self._test_encoders),
+                    test_encoder_keys=tuple(self._encoder_down),
+                    test_slider=self._slider,
                     flip=flip,
                     brightness=brightness,
                 )
@@ -118,7 +162,10 @@ class SimulatedDevice:
                 return Screen(kind="offline", flip=flip, brightness=brightness)
             if self._overlay is not None and now < self._overlay_until:
                 return replace(self._overlay, online=online, flip=flip, brightness=brightness)
-            return replace(self._base, online=online, flip=flip, brightness=brightness)
+            base = self._base
+            if base.kind == "grid" and self.board in BOARD_ICONS:
+                base = replace(base, icons=self.icons())
+            return replace(base, online=online, flip=flip, brightness=brightness)
 
     # ------------------------------------------------------------------ wejścia (UI)
 
@@ -134,10 +181,61 @@ class SimulatedDevice:
                 return
             self._pressed[key - 1] = down
             self._last_activity = self.clock()
+            if down:
+                self._key_down_ms[key] = self._ms()
             offline = not self.online
         self.emit({"type": "key", "key": key, "action": "down" if down else "up", "t": self._ms()})
         if offline and down:
             self._hid(str(key))
+
+    # Pokrętła i suwak (tylko płytki z BOARDS_WITH_CONTROLS, jak ChocPilot v0).
+
+    @property
+    def has_controls(self) -> bool:
+        return self.board in BOARDS_WITH_CONTROLS
+
+    def turn(self, index: int, delta: int) -> None:
+        if not self.has_controls or delta == 0:
+            return
+        self._activity()
+        with self._lock:
+            if self._test_mode:
+                self._test_encoders[index - 1] += delta
+        self.emit({"type": "encoder", "index": index, "delta": delta, "t": self._ms()})
+
+    def press_encoder(self, index: int) -> None:
+        self._encoder_key(index, True)
+
+    def release_encoder(self, index: int) -> None:
+        self._encoder_key(index, False)
+
+    def _encoder_key(self, index: int, down: bool) -> None:
+        if not self.has_controls:
+            return
+        self._activity()
+        with self._lock:
+            self._encoder_down[index - 1] = down
+        self.emit(
+            {
+                "type": "encoder_key",
+                "index": index,
+                "action": "down" if down else "up",
+                "t": self._ms(),
+            }
+        )
+
+    def move_slider(self, value: int) -> None:
+        if not self.has_controls:
+            return
+        self._activity()
+        value = max(0, min(protocol.SLIDER_MAX, int(value)))
+        with self._lock:
+            self._slider = value
+        self.emit({"type": "slider", "value": value, "t": self._ms()})
+
+    def _activity(self) -> None:
+        with self._lock:
+            self._last_activity = self.clock()
 
     def _hid(self, slot: str) -> None:
         binding = self.fallback.get(slot)
@@ -183,12 +281,19 @@ class SimulatedDevice:
             "fw": FW_VERSION,
             "board": self.board,
             "keys": protocol.KEY_COUNT,
-            "encoder": False,
+            "encoder": self.has_controls,
             "hid": True,
             "online": self.online,
-            "oled": 0x3C,
-            "i2c": [0x3C],
         }
+        if self.led_count:
+            hello["leds"] = self.led_count
+        if self.board in BOARD_SAVERS:
+            hello["savers"] = list(BOARD_SAVERS[self.board])
+        if self.board in BOARD_ICONS:
+            hello["icon"] = BOARD_ICONS[self.board]
+        if not self.has_controls:  # LCD ChocPilot v0 nie ma diagnostyki I²C
+            hello["oled"] = 0x3C
+            hello["i2c"] = [0x3C]
         if self.board in BOARD_MAX_LINE:
             hello["max_line"] = self.max_line
         return hello
@@ -230,12 +335,104 @@ class SimulatedDevice:
         elif kind == "test_mode":
             with self._lock:
                 self._test_mode = bool(message.get("enable", True))
+                self._test_encoders = [0] * protocol.ENCODER_COUNT  # suma od wejścia w test
             self.emit({"type": "test", "active": self._test_mode})
         elif kind == "debug":
             self.debug = bool(message.get("enable", True))
+        elif kind == "leds":
+            self._leds(message)
+        elif kind == "icon":
+            self._icon(message)
+        elif kind == "time":
+            values = [message.get(k, 0) for k in ("hour", "minute", "second")]
+            if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+                raise ProtocolError("integer expected")
+            protocol.msg_time(*values)  # ta sama walidacja co firmware
+            with self._lock:
+                self._wall_clock = (values[0] * 3600 + values[1] * 60 + values[2], self.clock())
         else:
             return False
         return True
+
+    # ------------------------------------------------------------------ podświetlenie
+
+    @property
+    def led_count(self) -> int:
+        return BOARD_LEDS.get(self.board, 0)
+
+    def _leds(self, message: dict[str, Any]) -> None:
+        fields = ("mode", "color", "brightness", "speed", "react")
+        values = {k: message[k] for k in fields if k in message}
+        save = message.get("save", True)
+        if not isinstance(save, bool):
+            raise ProtocolError("save: bool expected")
+        protocol.msg_leds(**values, save=save)  # ta sama walidacja co firmware
+        if "color" in values:
+            values["color"] = values["color"].lower()
+        if not self.led_count:
+            return  # płytka bez diod (Pro Micro) – komenda bez efektu, jak w firmware
+        with self._lock:
+            self.leds_live = replace(self.leds_live, **values)
+            if save:
+                self.leds_saved = replace(self.leds_saved, **values)
+
+    def _icon(self, message: dict[str, Any]) -> None:
+        key = message.get("key")
+        if not isinstance(key, int) or isinstance(key, bool) or not 1 <= key <= protocol.KEY_COUNT:
+            raise ProtocolError("value out of range")
+        if self.board not in BOARD_ICONS:
+            return  # bez LCD – komenda ignorowana, jak w firmware
+        slot = key - 1
+        if message.get("clear") is True:
+            with self._lock:
+                self._icon_filled[slot] = 0
+            return
+        offset = message.get("offset", 0)
+        try:
+            data = base64.b64decode(str(message.get("data", "")), validate=True)
+        except ValueError as exc:
+            raise ProtocolError("bad icon data") from exc
+        if not isinstance(offset, int) or not data or offset + len(data) > protocol.ICON_BYTES:
+            raise ProtocolError("bad icon data")
+        with self._lock:
+            if offset == 0:
+                self._icon_filled[slot] = 0
+            if offset != self._icon_filled[slot]:
+                return  # zgubiony kawałek – czekamy na offset 0
+            self._icon_buf[slot][offset : offset + len(data)] = data
+            self._icon_filled[slot] = offset + len(data)
+
+    def icons(self) -> tuple[bytes | None, ...]:
+        with self._lock:
+            return tuple(
+                bytes(buf) if filled == protocol.ICON_BYTES else None
+                for buf, filled in zip(self._icon_buf, self._icon_filled, strict=True)
+            )
+
+    def _clock_text(self, now: float) -> str:
+        """HH:MM jak WallClock w firmware (liczy dalej od ostatniej komendy time)."""
+        if self._wall_clock is None:
+            return ""
+        seconds_at_sync, synced = self._wall_clock
+        seconds = (seconds_at_sync + int(now - synced)) % 86400
+        return f"{seconds // 3600:02d}:{seconds // 60 % 60:02d}"
+
+    def led_colors(self) -> list[leds.Rgb]:
+        """Kolory diod teraz (jak firmware: wygaszacz, tryb testu, błysk klawiszy)."""
+        if not self.led_count:
+            return []
+        screen = self.screen()
+        with self._lock:
+            state = self.leds_live if self.online else self.leds_saved
+            return leds.render(
+                state,
+                self._ms(),
+                online=self.online,
+                sleeping=screen.kind in ("off", "saver"),
+                test=self._test_mode,
+                key_down_at=dict(self._key_down_ms),
+                count=self.led_count,
+            )
 
     def _display(self, message: dict[str, Any]) -> None:
         mode = message.get("mode")

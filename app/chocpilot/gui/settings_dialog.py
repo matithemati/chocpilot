@@ -28,15 +28,24 @@ from PySide6.QtWidgets import (
 
 from ..core import osinfo
 from ..core.actions import parse_hotkey
-from ..core.config import FallbackEntry, Settings
-from ..core.protocol import KEY_COUNT, MEDIA_KEYS
+from ..core.config import FallbackEntry, LedSettings, Settings
+from ..core.protocol import KEY_COUNT, LED_SPEED_MAX, LED_SPEED_MIN, MEDIA_KEYS
+from .editors import LED_SWATCHES, ColorButton
 from .i18n import tr
 from .widgets import Segmented, Switch, button, frame, hline, label, styled
 
 FALLBACK_SLOTS = [(str(i), f"K{i}") for i in range(1, KEY_COUNT + 1)]
+# Nazwy wbudowanych animacji wygaszacza; nieznane (np. z nowszego firmware) – nazwa z urządzenia.
+SAVER_LABELS = {"off": "Wygaszony ekran", "rabbit": "Królik", "corgi": "Corgi"}
+
+
+def saver_label(name: str) -> str:
+    return tr(SAVER_LABELS[name]) if name in SAVER_LABELS else name.replace("_", " ").capitalize()
+
 
 TABS = (
     ("device", "Urządzenie"),
+    ("leds", "Podświetlenie"),
     ("gestures", "Gesty"),
     ("fallback", "Tryb awaryjny"),
     ("app", "Aplikacja"),
@@ -91,6 +100,7 @@ class SettingsDialog(QDialog):
         list_ports: Callable[[], list[tuple[str, str]]],
         on_device_action: Callable[[str], None],
         parent: QWidget | None = None,
+        on_leds_preview: Callable[[LedSettings], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Ustawienia – ChocPilot"))
@@ -130,6 +140,13 @@ class SettingsDialog(QDialog):
         bb.addWidget(brightness_value)
         self.screensaver = _spin(0, 65535, d.screensaver_s, " s")
         self.screensaver.setSpecialValueText(tr("wyłączony"))
+        # Animacja wygaszacza – lista z urządzenia (hello: savers), tylko płytki z LCD.
+        self.saver = QComboBox()
+        for name in ["off", *d.savers_available]:
+            self.saver.addItem(saver_label(name), name)
+        if self.saver.findData(d.saver) < 0:  # animacja z innej płytki – zostaje zapisana
+            self.saver.addItem(saver_label(d.saver), d.saver)
+        self.saver.setCurrentIndex(max(0, self.saver.findData(d.saver)))
         self.display_mode = QComboBox()
         self.display_mode.addItem(tr("Siatka etykiet 2×4"), "grid")
         self.display_mode.addItem(tr("Duża nazwa profilu"), "profile")
@@ -154,6 +171,7 @@ class SettingsDialog(QDialog):
                 _row(tr("Port"), tr("Port szeregowy ChocPilot"), self.port),
                 _row(tr("Jasność ekranu"), "0–255", brightness_box),
                 _row(tr("Wygaszacz po"), tr("0 = wyłączony"), self.screensaver),
+                self._saver_row(),
                 _row(tr("Tryb ekranu"), "", self.display_mode),
                 _row(tr("Obróć ekran o 180°"), "", self.flip),
                 _row(tr("Debounce klawiszy"), "1–50 ms", self.debounce),
@@ -164,6 +182,66 @@ class SettingsDialog(QDialog):
             device_page.layout().count() - 1, _row(tr("Akcje urządzenia"), "", None)
         )
         device_page.layout().insertWidget(device_page.layout().count() - 1, actions)
+
+        # --- podświetlenie LED (płytki z diodami, np. ChocPilot v0)
+        self._leds_preview = on_leds_preview
+        self.leds_previewed = False
+        led = d.leds
+        self.led_mode = QComboBox()
+        for key, text in (
+            ("status", "Stan połączenia (turkus / bursztyn)"),
+            ("static", "Stały kolor"),
+            ("breathe", "Oddychanie"),
+            ("rainbow", "Tęcza"),
+            ("off", "Wyłączone"),
+        ):
+            self.led_mode.addItem(tr(text), key)
+        self.led_mode.setCurrentIndex(max(0, self.led_mode.findData(led.mode)))
+        self.led_color = ColorButton(swatches=LED_SWATCHES, title="", dialog_title=tr("Kolor LED"))
+        self.led_color.set_color(led.color)
+        self.led_brightness = QSlider(Qt.Orientation.Horizontal)
+        self.led_brightness.setRange(0, 255)
+        self.led_brightness.setValue(led.brightness)
+        led_brightness_value = label(str(led.brightness), "muted")
+        led_brightness_value.setMinimumWidth(30)
+        self.led_brightness.valueChanged.connect(lambda v: led_brightness_value.setText(str(v)))
+        led_brightness_box = QWidget()
+        lbb = QHBoxLayout(led_brightness_box)
+        lbb.setContentsMargins(0, 0, 0, 0)
+        lbb.addWidget(self.led_brightness, 1)
+        lbb.addWidget(led_brightness_value)
+        self.led_speed = QSlider(Qt.Orientation.Horizontal)
+        self.led_speed.setRange(LED_SPEED_MIN, LED_SPEED_MAX)
+        self.led_speed.setValue(led.speed)
+        self.led_react = Switch(tr("Błysk diody przy naciśniętym klawiszu"))
+        self.led_react.setChecked(led.react)
+        leds_page = _page(
+            [
+                _row(
+                    tr("Efekt"),
+                    tr("Działa też bez aplikacji (zapisany w urządzeniu)"),
+                    self.led_mode,
+                ),
+                _row(
+                    tr("Kolor"),
+                    tr("Tryby stały i oddychanie; profil może mieć własny"),
+                    self.led_color,
+                ),
+                _row(
+                    tr("Jasność LED"),
+                    tr("0–255; ograniczona w urządzeniu do bezpiecznego prądu USB"),
+                    led_brightness_box,
+                ),
+                _row(tr("Tempo"), tr("Oddychanie i tęcza: 1 = wolno, 10 = szybko"), self.led_speed),
+                self._wrap(self.led_react),
+            ]
+        )
+        self.led_mode.currentIndexChanged.connect(self._leds_changed)
+        self.led_color.changed.connect(self._leds_changed)
+        self.led_brightness.valueChanged.connect(self._leds_changed)
+        self.led_speed.valueChanged.connect(self._leds_changed)
+        self.led_react.toggled.connect(self._leds_changed)
+        self._update_led_controls()
 
         # --- gesty
         g = settings.gestures
@@ -294,7 +372,7 @@ class SettingsDialog(QDialog):
         nav.addStretch(1)
         for key, page in zip(
             [k for k, _ in TABS],
-            [device_page, gestures_page, fall, app_page],
+            [device_page, leds_page, gestures_page, fall, app_page],
             strict=True,
         ):
             scroll = QScrollArea()
@@ -305,6 +383,8 @@ class SettingsDialog(QDialog):
             self.tab_buttons[key].clicked.connect(
                 lambda _=False, w=scroll: self.pages.setCurrentWidget(w)
             )
+        # Zakładka LED tylko dla płytek z diodami (ustawiane po pierwszym podłączeniu).
+        self.tab_buttons["leds"].setVisible(d.leds_available)
         self.show_tab("device")
 
         # --- układ: nagłówek, karta z nawigacją i treścią
@@ -345,6 +425,16 @@ class SettingsDialog(QDialog):
         layout.addLayout(head)
         layout.addWidget(card, 1)
 
+    def _saver_row(self) -> QWidget:
+        row = _row(
+            tr("Animacja wygaszacza"),
+            tr("Co pokazuje ekran LCD, gdy włączy się wygaszacz"),
+            self.saver,
+        )
+        row.setVisible(bool(self.settings.device.savers_available))
+        self.saver_row = row
+        return row
+
     @staticmethod
     def _wrap(widget: QWidget) -> QWidget:
         host = QWidget()
@@ -357,6 +447,27 @@ class SettingsDialog(QDialog):
     def show_tab(self, key: str) -> None:
         self.tab_buttons[key].setChecked(True)
         self.pages.setCurrentIndex([k for k, _ in TABS].index(key))
+
+    def led_settings(self) -> LedSettings:
+        return LedSettings(
+            mode=self.led_mode.currentData(),
+            color=self.led_color.color(),
+            brightness=self.led_brightness.value(),
+            speed=self.led_speed.value(),
+            react=self.led_react.isChecked(),
+        )
+
+    def _update_led_controls(self) -> None:
+        mode = self.led_mode.currentData()
+        self.led_color.setEnabled(mode in ("static", "breathe"))
+        self.led_speed.setEnabled(mode in ("breathe", "rainbow"))
+        self.led_brightness.setEnabled(mode != "off")
+
+    def _leds_changed(self, *_args: object) -> None:
+        self._update_led_controls()
+        if self._leds_preview is not None:
+            self._leds_preview(self.led_settings())
+            self.leds_previewed = True
 
     def embed(self) -> None:
         """Tryb strony okna głównego (bez ramki i tytułu okna)."""
@@ -401,9 +512,11 @@ class SettingsDialog(QDialog):
         d.port = self.port.currentData()
         d.brightness = self.brightness.value()
         d.screensaver_s = self.screensaver.value()
+        d.saver = self.saver.currentData()
         d.display_mode = self.display_mode.currentData()
         d.flip = self.flip.isChecked()
         d.debounce_ms = self.debounce.value()
+        d.leds = self.led_settings()
         self.device_changed = d.model_dump() != before
         self.port_changed = d.port != old_port
 

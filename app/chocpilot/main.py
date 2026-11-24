@@ -16,6 +16,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--simulate", action="store_true", help="użyj symulatora zamiast urządzenia"
     )
+    parser.add_argument(
+        "--board",
+        choices=("promicro", "chocpilot_v0"),
+        default="promicro",
+        help="płytka symulatora (chocpilot_v0: z pokrętłami i suwakiem)",
+    )
     parser.add_argument("--minimized", action="store_true", help="start w zasobniku")
     parser.add_argument("--config", type=Path, help="ścieżka pliku konfiguracji")
     parser.add_argument("--verbose", action="store_true", help="szczegółowy dziennik na konsoli")
@@ -26,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
 
     return run(
         simulate=args.simulate,
+        board=args.board,
         minimized=args.minimized,
         config_path=args.config,
         verbose=args.verbose,

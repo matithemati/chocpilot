@@ -13,5 +13,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# OpenSCAD
-*.stl
+# Kopie zapasowe SolidCraft i lokalna historia KiCad
+*.sc.bak
+.history/

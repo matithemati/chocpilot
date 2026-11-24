@@ -1,12 +1,15 @@
-"""Tworzy chocpilot-v2.kicad_pro z szablonu KiCad: reguły DRC i klasy sieci."""
+"""Tworzy chocpilot-v0.kicad_pro z szablonu KiCad: reguły DRC i klasy sieci."""
 import json
 import os
+import sys
 
-TPL = '/Applications/KiCad/KiCad.app/Contents/SharedSupport/template/kicad.kicad_pro'
-OUT = os.path.join(os.path.dirname(__file__), '..', 'chocpilot-v2.kicad_pro')
+sys.path.insert(0, os.path.dirname(__file__))
+from kicad_env import TEMPLATE_PRO as TPL  # noqa: E402
 
-d = json.load(open(TPL))
-d['meta']['filename'] = 'chocpilot-v2.kicad_pro'
+OUT = os.path.join(os.path.dirname(__file__), '..', 'chocpilot-v0.kicad_pro')
+
+d = json.load(open(TPL, encoding='utf-8'))
+d['meta']['filename'] = 'chocpilot-v0.kicad_pro'
 ds = d['board']['design_settings']
 ds['rules'].update({
     'min_clearance': 0.2,
@@ -42,5 +45,5 @@ d['net_settings']['classes'] = [base, cls('Power5V', 0.6, 0.2), cls('Power3V3', 
 d['net_settings']['netclass_patterns'] = [
     {'netclass': 'Power5V', 'pattern': 'VBUS'}, {'netclass': 'Power5V', 'pattern': '+5V'},
     {'netclass': 'Power3V3', 'pattern': '+3V3'}, {'netclass': 'Ground', 'pattern': 'GND'}]
-json.dump(d, open(OUT, 'w'), indent=2)
+json.dump(d, open(OUT, 'w', encoding='utf-8', newline='\n'), indent=2)
 print('zapisano', os.path.normpath(OUT))

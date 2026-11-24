@@ -19,11 +19,13 @@ from ..core.transport import SerialTransport, Transport
 from ..platform import create_platform
 from .bridge import QtBridge
 from .i18n import set_language, tr
+from .icon_library import library as icon_library
 from .icons import app_icon
 from .main_window import MainWindow
 from .simulator_window import SimulatorWindow
 from .theme import apply_theme
 from .tray import TrayIcon
+from .widgets import ComboWheelGuard
 
 log = logging.getLogger("chocpilot.gui")
 
@@ -63,6 +65,9 @@ def run(
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setWindowIcon(app_icon())
+    # Kółko myszy nad zamkniętą listą rozwijaną przewija stronę zamiast zmieniać wybór.
+    wheel_guard = ComboWheelGuard(app)
+    app.installEventFilter(wheel_guard)
 
     if notify_running_instance():
         return 0
@@ -97,6 +102,7 @@ def run(
         transport.on_sent = mirror.handle
 
     controller = Controller(config, transport, platform, store=store)
+    controller.icon_payload = icon_library().device_payload  # ikony klawiszy na LCD
     bridge = QtBridge()
     controller.add_listener(bridge)
     log_buffer.add_listener(bridge.on_log)

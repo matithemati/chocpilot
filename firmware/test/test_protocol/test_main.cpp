@@ -1,12 +1,15 @@
 // Testy parsera protokołu, budowania wiadomości, kodów HID i zapisu konfiguracji.
+#include <stddef.h>
 #include <string.h>
 #include <unity.h>
 
 #include "debouncer.h"
 #include "device_config.h"
 #include "hid_codes.h"
+#include "led_effects.h"
 #include "protocol_codec.h"
 #include "time_util.h"
+#include "wall_clock.h"
 
 using namespace chocpilot;
 
@@ -219,6 +222,23 @@ void test_build_messages() {
   TEST_ASSERT_EQUAL(0, buildHello(buf, 10, "promicro", "1.0.0", false));
 }
 
+void test_build_controls_messages() {
+  char buf[256];
+  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", false, nullptr, true);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"board\":\"chocpilot_v0\""));
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"encoder\":true"));
+  TEST_ASSERT_NULL(strstr(buf, "\"oled\""));
+
+  buildEncoder(buf, sizeof(buf), 1, -3, 500);
+  TEST_ASSERT_EQUAL_STRING("{\"type\":\"encoder\",\"index\":1,\"delta\":-3,\"t\":500}", buf);
+  buildEncoderKey(buf, sizeof(buf), 2, true, 501);
+  TEST_ASSERT_EQUAL_STRING("{\"type\":\"encoder_key\",\"index\":2,\"action\":\"down\",\"t\":501}",
+                           buf);
+  buildSlider(buf, sizeof(buf), 100, 502);
+  TEST_ASSERT_EQUAL_STRING("{\"type\":\"slider\",\"value\":100,\"t\":502}", buf);
+  TEST_ASSERT_EQUAL(0, buildSlider(buf, 10, 42, 0));
+}
+
 void test_hid_codes() {
   TEST_ASSERT_EQUAL_UINT8(0x04, hidKeyFromName("a"));
   TEST_ASSERT_EQUAL_UINT8(0x1D, hidKeyFromName("Z"));
@@ -324,6 +344,251 @@ void test_elapsed_handles_future_and_wraparound() {
   TEST_ASSERT_TRUE(elapsed(3000, 0xFFFFFFF0u, 3000));
 }
 
+void test_leds_command() {
+  ParseResult r = parse(
+      "{\"type\":\"leds\",\"id\":7,\"mode\":\"breathe\",\"color\":\"#ff8000\",\"brightness\":200,"
+      "\"speed\":9,\"react\":false}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_EQUAL(CommandType::Leds, cmd.type);
+  TEST_ASSERT_TRUE(cmd.leds.save);  // domyślnie zapis do pamięci
+  TEST_ASSERT_EQUAL(LedMode::Breathe, cmd.leds.values.mode);
+  TEST_ASSERT_EQUAL_UINT8(0xFF, cmd.leds.values.r);
+  TEST_ASSERT_EQUAL_UINT8(0x80, cmd.leds.values.g);
+  TEST_ASSERT_EQUAL_UINT8(0x00, cmd.leds.values.b);
+
+  LedSettings s;
+  cmd.leds.applyTo(s);
+  TEST_ASSERT_EQUAL_UINT8(200, s.brightness);
+  TEST_ASSERT_EQUAL_UINT8(9, s.speed);
+  TEST_ASSERT_FALSE(s.react);
+
+  // częściowa zmiana bez zapisu: tylko kolor
+  r = parse("{\"type\":\"leds\",\"color\":\"#00FF00\",\"save\":false}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_FALSE(cmd.leds.save);
+  cmd.leds.applyTo(s);
+  TEST_ASSERT_EQUAL(LedMode::Breathe, s.mode);
+  TEST_ASSERT_EQUAL_UINT8(0xFF, s.g);
+  TEST_ASSERT_EQUAL_UINT8(200, s.brightness);
+
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"leds\",\"mode\":\"disco\"}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"leds\",\"color\":\"#12345\"}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"leds\",\"color\":\"#12345G\"}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"leds\",\"speed\":0}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"leds\",\"brightness\":256}").status);
+}
+
+void test_hello_reports_leds() {
+  char buf[256];
+  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", true, nullptr, true, 12);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"leds\":12"));
+  buildHello(buf, sizeof(buf), "promicro", "1.1.0", true);
+  TEST_ASSERT_NULL(strstr(buf, "\"leds\""));
+}
+
+void test_config_v1_keeps_settings() {
+  // Zapis sprzed LED (wersja 1): ta sama struktura bez końcowego pola leds.
+  DeviceConfig cfg;
+  cfg.setDefaults();
+  cfg.settings.brightness = 33;
+  char buf[1536];
+  const size_t n = encodeConfig(cfg, buf, sizeof(buf));
+  const size_t v1Fields = offsetof(DeviceConfig, leds);
+  const size_t v1Size = (v1Fields + alignof(DeviceConfig) - 1) / alignof(DeviceConfig) *
+                        alignof(DeviceConfig);
+  TEST_ASSERT_TRUE(n > 1 + v1Size);
+  buf[0] = 1;
+  DeviceConfig back;
+  TEST_ASSERT_TRUE(decodeConfig(buf, 1 + v1Size, back));
+  TEST_ASSERT_EQUAL_UINT8(33, back.settings.brightness);
+  TEST_ASSERT_EQUAL(LedMode::Status, back.leds.mode);  // domyślne LED
+
+  // wersja 2 przenosi ustawienia LED
+  cfg.leds.mode = LedMode::Rainbow;
+  cfg.leds.speed = 3;
+  const size_t n2 = encodeConfig(cfg, buf, sizeof(buf));
+  TEST_ASSERT_TRUE(decodeConfig(buf, n2, back));
+  TEST_ASSERT_EQUAL(LedMode::Rainbow, back.leds.mode);
+  TEST_ASSERT_EQUAL_UINT8(3, back.leds.speed);
+}
+
+void test_led_effects() {
+  LedSettings s;
+  s.mode = LedMode::Static;
+  s.r = 255;
+  s.g = 0;
+  s.b = 0;
+  s.brightness = 255;
+  LedFrame f;
+  f.now = 1000;
+  f.online = true;
+  Rgb out[12];
+
+  renderLeds(s, f, out, 12);
+  TEST_ASSERT_EQUAL_UINT8(kLedMaxLevel, out[0].r);  // pełna jasność = limit prądu
+  TEST_ASSERT_EQUAL_UINT8(0, out[11].g);
+
+  // wygaszacz i tryb off gaszą wszystko
+  f.sleeping = true;
+  renderLeds(s, f, out, 12);
+  TEST_ASSERT_EQUAL_UINT8(0, out[0].r);
+  f.sleeping = false;
+  s.mode = LedMode::Off;
+  renderLeds(s, f, out, 12);
+  TEST_ASSERT_EQUAL_UINT8(0, out[5].r);
+
+  // status: offline = bursztyn (czerwony > niebieski)
+  s.mode = LedMode::Status;
+  f.online = false;
+  renderLeds(s, f, out, 12);
+  TEST_ASSERT_TRUE(out[0].r > out[0].b);
+
+  // oddychanie: najjaśniej w połowie okresu, najciemniej na początku
+  s.mode = LedMode::Breathe;
+  s.speed = 1;  // okres 6 s
+  f.now = 0;
+  renderLeds(s, f, out, 12);
+  const uint8_t dim = out[0].r;
+  f.now = 3000;
+  renderLeds(s, f, out, 12);
+  TEST_ASSERT_TRUE(out[0].r > dim * 4);
+
+  // tęcza: sąsiednie diody mają różne kolory
+  s.mode = LedMode::Rainbow;
+  renderLeds(s, f, out, 12);
+  TEST_ASSERT_FALSE(out[0].r == out[4].r && out[0].g == out[4].g && out[0].b == out[4].b);
+
+  // błysk klawisza K3 → dioda 10, wygasa po kLedReactMs
+  s.mode = LedMode::Static;
+  s.r = 0;
+  s.react = true;
+  const uint8_t keyLed[8] = {8, 9, 10, 11, 5, 4, 3, 2};
+  uint32_t downAt[8] = {0};
+  downAt[2] = 5000;
+  f.keyDownAt = downAt;
+  f.keyLed = keyLed;
+  f.reactMask = 1u << 2;
+  f.now = 5000;
+  uint8_t active = renderLeds(s, f, out, 12);
+  TEST_ASSERT_EQUAL_UINT8(1u << 2, active);
+  TEST_ASSERT_EQUAL_UINT8(kLedMaxLevel, out[10].b);  // pełna biel (po limicie jasności)
+  TEST_ASSERT_EQUAL_UINT8(0, out[9].b);
+  f.now = 5000 + kLedReactMs;
+  active = renderLeds(s, f, out, 12);
+  TEST_ASSERT_EQUAL_UINT8(0, active);
+  TEST_ASSERT_EQUAL_UINT8(0, out[10].b);
+
+  TEST_ASSERT_EQUAL_UINT8(255, hueToRgb(0).r);
+  TEST_ASSERT_EQUAL_UINT8(255, hueToRgb(86).g);
+}
+
+void test_settings_saver() {
+  ParseResult r = parse("{\"type\":\"settings\",\"saver\":\"corgi\"}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_TRUE(cmd.settings.mask & SettingsPatch::kSaver);
+  TEST_ASSERT_EQUAL_STRING("corgi", cmd.settings.saver);
+  r = parse("{\"type\":\"settings\",\"saver\":\"off\"}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_EQUAL_STRING("", cmd.settings.saver);  // off = wygaszony ekran
+  r = parse("{\"type\":\"settings\",\"brightness\":10}");
+  TEST_ASSERT_FALSE(cmd.settings.mask & SettingsPatch::kSaver);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"settings\",\"saver\":5}").status);
+  // za długa nazwa jest obcinana do 11 znaków
+  parse("{\"type\":\"settings\",\"saver\":\"abcdefghijklmnop\"}");
+  TEST_ASSERT_EQUAL_STRING("abcdefghijk", cmd.settings.saver);
+}
+
+void test_hello_reports_savers() {
+  char buf[256];
+  const char* names[] = {"rabbit", "corgi"};
+  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", true, nullptr, true, 12, names, 2);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"savers\":[\"rabbit\",\"corgi\"]"));
+  buildHello(buf, sizeof(buf), "promicro", "1.1.0", true);
+  TEST_ASSERT_NULL(strstr(buf, "\"savers\""));
+}
+
+void test_config_v2_keeps_leds_and_v3_keeps_saver() {
+  DeviceConfig cfg;
+  cfg.setDefaults();
+  cfg.leds.mode = LedMode::Breathe;
+  copyUtf8(cfg.saver.name, sizeof(cfg.saver.name), "rabbit", kSaverNameBuf - 1);
+  char buf[1536];
+  const size_t n = encodeConfig(cfg, buf, sizeof(buf));
+  DeviceConfig back;
+  TEST_ASSERT_TRUE(decodeConfig(buf, n, back));
+  TEST_ASSERT_EQUAL_STRING("rabbit", back.saver.name);
+  TEST_ASSERT_EQUAL(LedMode::Breathe, back.leds.mode);
+
+  // zapis wersji 2 (bez saver): LED zostają, wygaszacz domyślny (pusty)
+  const size_t v2Fields = offsetof(DeviceConfig, saver);
+  const size_t v2Size =
+      (v2Fields + alignof(DeviceConfig) - 1) / alignof(DeviceConfig) * alignof(DeviceConfig);
+  buf[0] = 2;
+  TEST_ASSERT_TRUE(decodeConfig(buf, 1 + v2Size, back));
+  TEST_ASSERT_EQUAL(LedMode::Breathe, back.leds.mode);
+  TEST_ASSERT_EQUAL_STRING("", back.saver.name);
+}
+
+void test_time_command_and_wall_clock() {
+  ParseResult r = parse("{\"type\":\"time\",\"hour\":23,\"minute\":59,\"second\":30}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_EQUAL(CommandType::Time, cmd.type);
+  TEST_ASSERT_EQUAL_UINT8(23, cmd.time.hour);
+  TEST_ASSERT_EQUAL_UINT8(59, cmd.time.minute);
+  TEST_ASSERT_EQUAL_UINT8(30, cmd.time.second);
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, parse("{\"type\":\"time\",\"hour\":7,\"minute\":5}").status);
+  TEST_ASSERT_EQUAL_UINT8(0, cmd.time.second);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"time\",\"hour\":24,\"minute\":0}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"time\",\"hour\":1}").status);
+
+  WallClock clock;
+  uint8_t h = 0, m = 0;
+  TEST_ASSERT_FALSE(clock.now(0, h, m));  // bez czasu z aplikacji – brak zegara
+  clock.set(23, 59, 30, 0xFFFFF000UL);    // tuż przed przepełnieniem millis()
+  TEST_ASSERT_TRUE(clock.now(0xFFFFF000UL + 29000, h, m));
+  TEST_ASSERT_EQUAL_UINT8(23, h);
+  TEST_ASSERT_EQUAL_UINT8(59, m);
+  TEST_ASSERT_TRUE(clock.now(0xFFFFF000UL + 31000, h, m));  // przez północ i przepełnienie
+  TEST_ASSERT_EQUAL_UINT8(0, h);
+  TEST_ASSERT_EQUAL_UINT8(0, m);
+  TEST_ASSERT_TRUE(clock.now(0xFFFFF000UL + 31000 + 90UL * 60 * 1000, h, m));
+  TEST_ASSERT_EQUAL_UINT8(1, h);
+  TEST_ASSERT_EQUAL_UINT8(30, m);
+}
+
+void test_icon_command_and_base64() {
+  uint8_t out[8];
+  TEST_ASSERT_EQUAL_INT(3, decodeBase64("AQID", 4, out, sizeof(out)));
+  TEST_ASSERT_EQUAL_UINT8(1, out[0]);
+  TEST_ASSERT_EQUAL_UINT8(3, out[2]);
+  TEST_ASSERT_EQUAL_INT(1, decodeBase64("/w==", 4, out, sizeof(out)));
+  TEST_ASSERT_EQUAL_UINT8(0xFF, out[0]);
+  TEST_ASSERT_EQUAL_INT(-1, decodeBase64("AQI", 3, out, sizeof(out)));   // zła długość
+  TEST_ASSERT_EQUAL_INT(-1, decodeBase64("A=QI", 4, out, sizeof(out)));  // znak po '='
+  TEST_ASSERT_EQUAL_INT(-1, decodeBase64("AQIDBAUG", 8, out, 4));        // brak miejsca
+
+  ParseResult r = parse("{\"type\":\"icon\",\"key\":3,\"offset\":128,\"data\":\"AQIDBA==\"}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_EQUAL(CommandType::Icon, cmd.type);
+  TEST_ASSERT_EQUAL_UINT8(3, cmd.icon.key);
+  TEST_ASSERT_EQUAL_UINT16(128, cmd.icon.offset);
+  TEST_ASSERT_EQUAL_UINT8(4, cmd.icon.len);
+  TEST_ASSERT_EQUAL_UINT8(4, cmd.icon.data[3]);
+  TEST_ASSERT_FALSE(cmd.icon.clear);
+  r = parse("{\"type\":\"icon\",\"key\":8,\"clear\":true}");
+  TEST_ASSERT_EQUAL(ParseStatus::Ok, r.status);
+  TEST_ASSERT_TRUE(cmd.icon.clear);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"icon\",\"key\":9,\"data\":\"AA==\"}").status);
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid, parse("{\"type\":\"icon\",\"key\":1,\"data\":\"!!!!\"}").status);
+  // kawałek wychodzący poza 544 B ikony
+  TEST_ASSERT_EQUAL(ParseStatus::Invalid,
+                    parse("{\"type\":\"icon\",\"key\":1,\"offset\":543,\"data\":\"AQID\"}").status);
+
+  char buf[256];
+  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", true, nullptr, true, 12, nullptr, 0, 32);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"icon\":32"));
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_invalid_json);
@@ -342,6 +607,16 @@ int main(int, char**) {
   RUN_TEST(test_fallback_errors);
   RUN_TEST(test_reboot_and_flags);
   RUN_TEST(test_build_messages);
+  RUN_TEST(test_build_controls_messages);
+  RUN_TEST(test_leds_command);
+  RUN_TEST(test_hello_reports_leds);
+  RUN_TEST(test_config_v1_keeps_settings);
+  RUN_TEST(test_led_effects);
+  RUN_TEST(test_settings_saver);
+  RUN_TEST(test_time_command_and_wall_clock);
+  RUN_TEST(test_icon_command_and_base64);
+  RUN_TEST(test_hello_reports_savers);
+  RUN_TEST(test_config_v2_keeps_leds_and_v3_keeps_saver);
   RUN_TEST(test_hid_codes);
   RUN_TEST(test_string_escapes_and_numbers);
   RUN_TEST(test_config_roundtrip);
