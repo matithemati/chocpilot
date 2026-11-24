@@ -1,13 +1,14 @@
-# Obudowa ChocPilot v0
+# Obudowa ChocPilot
 
-Model SolidCraft: `chocpilot_v0_case.sc` (eksporty: `chocpilot_v0_case.step`, `chocpilot_v0_case.3mf`,
-`chocpilot_v0_shell.stl`, `chocpilot_v0_bottom.stl`). Stary `chocpilot_case.scad` jest dla wcześniejszej
-płytki z Pro Micro i OLED – nie pasuje do v0.
+Obudowa, keycapy, gałki i podstawka dla płytki ChocPilot (STM32F072, `pcb/`) z ekranem Waveshare 2" IPS
+LCD. Modele są w SolidCraft (`.sc`, parametryczne), obok eksporty STEP (do innych programów CAD),
+3MF i STL (do druku).
+
+Model obudowy: `chocpilot_case.sc` (eksporty: `chocpilot_case.step`, `chocpilot_case.3mf`,
+`chocpilot_shell.stl`, `chocpilot_bottom.stl`).
 
 Współrzędne modelu: środek płytki w (0, 0), X w prawo, Y w stronę USB-C (górna krawędź PCB),
 Z = 0 pod dnem. Płytka: dół na z = 7,0, góra na z = 8,6.
-
-Wersja z dnem z płyty mlecznej (zamiast drukowanego): [Obudowa v2](#obudowa-v2--dno-z-płyty-mlecznej).
 
 ## Części
 
@@ -45,8 +46,8 @@ Wersja z dnem z płyty mlecznej (zamiast drukowanego): [Obudowa v2](#obudowa-v2-
 
 ## Keycapy, gałki pokręteł, nakładka suwaka
 
-Model: `chocpilot_v0_caps.sc` (STEP: `chocpilot_v0_caps.step`; STL: `chocpilot_v0_keycap.stl` ×8,
-`chocpilot_v0_knob.stl` ×2, `chocpilot_v0_slider_cap.stl` ×1). Części stoją w położeniu montażowym
+Model: `chocpilot_caps.sc` (STEP: `chocpilot_caps.step`; STL: `chocpilot_keycap.stl` ×8,
+`chocpilot_knob.stl` ×2, `chocpilot_slider_cap.stl` ×1). Części stoją w położeniu montażowym
 (te same współrzędne co obudowa) – w slicerze połóż je górą do stołu.
 
 | Część | Wymiary | Dopasowanie |
@@ -71,7 +72,7 @@ Najpierw wydrukuj jeden keycap i sprawdź wysokość i krzyżak.
 
 ## Podstawka
 
-Model: `chocpilot_v0_stand.sc` (STEP: `chocpilot_v0_stand.step`, STL: `chocpilot_v0_stand.stl`).
+Model: `chocpilot_stand.sc` (STEP: `chocpilot_stand.step`, STL: `chocpilot_stand.stl`).
 
 - Kołyska pochylająca urządzenie o **20°**: płyta pod całym spodem obudowy, z przodu próg 6 mm
   (przednia krawędź obudowy opiera się o niego), z tyłu stopka wysunięta 16 mm za płytę – mocne
@@ -87,55 +88,3 @@ Model: `chocpilot_v0_stand.sc` (STEP: `chocpilot_v0_stand.step`, STL: `chocpilot
 
 Druk: **na boku** (profil płasko na stole, oś X do góry) – bez podpór, warstwy wzdłuż profilu
 (najmocniejszy kierunek), brim 5 mm. PLA/PETG, 3–4 obrysy, 15–20 % wypełnienia.
-
-## Obudowa v2 – dno z płyty mlecznej
-
-Model SolidCraft: `chocpilot_v2_case.sc` (STEP całości: `chocpilot_v2_case.step`). Górna część to **ten sam
-Shell co w v0** (`chocpilot_v0_shell.stl` – już wydrukowany pasuje). Drukowane dno zastępuje płaska płyta
-z tworzywa mlecznego (opal), która rozprasza światło 12 diod WS2812B ze spodu płytki: świeci cały spód
-i krawędź płyty, a blat dostaje miękką poświatę zamiast 12 kropek.
-
-| Część | Materiał | Pliki |
-|---|---|---|
-| **Dno** 116,4 × 95,4 mm, R3,2 | płyta mleczna (opal) **3 mm**: pleksi (PMMA, „szkło akrylowe”) albo polistyren – arkusze do cięcia w marketach budowlanych (dział szkło organiczne / płyty z tworzyw) | `chocpilot_v2_bottom_template.pdf` (szablon 1:1 do druku), `chocpilot_v2_bottom.dxf` (do cięcia laserem), `chocpilot_v2_bottom.step` |
-| **Tulejki dystansowe** ×4, Ø6 × 5 mm, otwór Ø3,4 | druk 3D (PLA/PETG) | `chocpilot_v2_spacer.stl` (wydrukuj 4) |
-| **Wkręty** ×4 | **M3×16 z łbem stożkowym** (DIN 7991 / ISO 10642), stal | – |
-| **Nóżki** ×4 | samoprzylepne odbojniki Ø10, wysokość ≥ 3 mm | – |
-
-Położenie w modelu: płyta od z = −1 do z = 2 (spód urządzenia o 1 mm niżej niż w v0), tulejki z = 2–7, płytka
-z = 7,0–8,6 jak w v0. Diody (WS2812B, 1,6 mm) kończą się na z ≈ 5,4 – 3,4 mm nad płytą.
-
-Parametry (`set_parameter`): `sheet_t` (grubość płyty – przy polistyrenie 2,5 mm ustaw 2,5; Shell i płytka
-zostają na miejscu, zmienia się tylko spód), `spacer_h` (= `pcb_bot − rim_z`, 5 mm), `screw_d`, `cs_d`
-(fazowanie pod łeb), `access_d`. Szablon generuje `tools/gen_bottom_template.py` – przy zmianie wymiarów
-popraw liczby w skrypcie.
-
-### Wykonanie dna
-
-1. Wydrukuj `chocpilot_v2_bottom_template.pdf` w skali **100 %** i sprawdź linijką pasek 100 mm.
-   Szablon to **widok od spodu** (strona z fazowaniem), krawędź z USB-C u góry – przy innym ułożeniu
-   otwory wyjdą w lustrzanym odbiciu.
-2. Przyklej szablon na płytę (na folię ochronną). Tnij z naddatkiem ~0,5 mm: pleksi/polistyren 2,5–3 mm
-   zarysuj kilka razy nożem do tworzyw wzdłuż linijki i złam na krawędzi stołu; narożniki R3,2 i krawędzie
-   wyrównaj pilnikiem / papierem ściernym do obrysu (albo po złożeniu równo ze ścianką Shell).
-3. Wierć ostrym wiertłem, na małych obrotach, płyta na desce: 4× Ø3,4 i 2× Ø4 (RESET, BOOT). Od strony
-   szablonu zfazuj otwory M3 pogłębiaczem 90° do Ø6,4 (łeb wkrętu równo z płytą). Otwór H2 jest 4,7 mm od
-   krawędzi – fazuj delikatnie.
-4. Zdejmij folię z obu stron. Krawędź płyty można przeszlifować na mat (P400–P800) – świeci równiej.
-
-Zamiast cięcia ręcznego: `chocpilot_v2_bottom.dxf` (mm, widok od spodu; warstwa `CUT` – cięcie,
-`COUNTERSINK_NO_CUT` – tylko oznaczenie fazowania) przyjmie każdy zakład cięcia laserem pleksi.
-
-### Montaż v2
-
-Jak w v0, ale zamiast dna: wkręt M3×16 od spodu przez płytę → tulejkę → płytkę → kołek Shell (otwór Ø2,5,
-wkręt gwintuje plastik; ok. 6 mm gwintu w kołku). Dokręcaj z wyczuciem – łeb stożkowy rozpycha tworzywo
-i przy przeciągnięciu pleksi pęka. Na koniec nóżki w miejscach z szablonu (z dala od łbów wkrętów).
-
-### Do sprawdzenia
-
-- **Równomierność światła:** 3,4 mm od diody do płyty to mało – przez gęstą płytę opal będą widać jaśniejsze
-  plamy nad diodami. Płyta „satynowa” / mniej mleczna daje więcej światła na blat; firmware i tak musi
-  ograniczać jasność.
-- **Tulejki zamiast słupków dna:** drukowane, bo tulejek dystansowych M3 zwykle nie ma w marketach. Zamiast nich
-  można dać 2 nakrętki M3 + podkładkę (≈ 5,3 mm) – wtedy między płytą a Shell zostaje ok. 0,3 mm szczeliny.

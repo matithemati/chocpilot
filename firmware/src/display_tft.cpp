@@ -72,7 +72,7 @@ const char* skipChars(const char* text, uint8_t n) {
 }
 
 // Etykieta klawisza w kafelku: do 6 znaków w jednym wierszu, dłuższa w dwóch
-// (podział na spacji, jeśli wypada w pierwszych 6 znakach) – jak na OLED.
+// (podział na spacji, jeśli wypada w pierwszych 6 znakach) – jak w podglądzie aplikacji.
 void drawCellLabel(const char* label, int cx, int cy, uint16_t fg, uint16_t bg) {
   const int lineH = tft::textHeight(2);
   if (charCount(label) <= kCellLineChars) {

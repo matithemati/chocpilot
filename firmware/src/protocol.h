@@ -22,13 +22,12 @@ class Link {
   void sendError(bool hasId, int32_t id, FlashText msg);
   void sendLog(FlashText level, FlashText msg);
   void sendTest(bool active);
-  // Pokrętła i suwak (ChocPilot v0) – aplikacja bez ich obsługi ignoruje te wiadomości.
+  // Pokrętła i suwak – aplikacja bez ich obsługi ignoruje te wiadomości.
   void sendEncoder(uint8_t index, int16_t delta, uint32_t t);
   void sendEncoderKey(uint8_t index, bool down, uint32_t t);
   void sendSlider(uint8_t value, uint32_t t);
 
   bool debug = false;
-  const I2cDiag* diag = nullptr;  // dołączane do hello
   const char* const* savers = nullptr;  // animacje wygaszacza (hello: savers)
   uint8_t saverCount = 0;
   uint8_t iconSize = 0;  // hello: icon (rozmiar ikon klawiszy; 0 = bez ikon)

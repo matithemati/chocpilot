@@ -1,4 +1,4 @@
-// Efekty podświetlenia LED (ChocPilot v0) – czysta logika bez Arduino, testowana w native.
+// Efekty podświetlenia LED – czysta logika bez Arduino, testowana w native.
 #pragma once
 
 #include <stdint.h>

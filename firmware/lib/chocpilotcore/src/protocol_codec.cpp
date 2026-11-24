@@ -1,4 +1,4 @@
-// Kodek protokołu bez bibliotek JSON (ATmega32U4 ma 2,5 KB RAM).
+// Kodek protokołu bez bibliotek JSON: czyta linię w miejscu, bez alokacji.
 // Parser czyta linię w miejscu, bez alokacji i drzewa dokumentu: najpierw sprawdza składnię
 // całej wartości, potem wyszukuje pola po nazwie. Wiadomości wychodzące składa ręcznie.
 // Semantyka jak w ArduinoJson (null = brak pola, nadmiarowa treść po obiekcie jest pomijana).
@@ -455,14 +455,6 @@ ParseResult parseSettings(const char* obj, SettingsPatch& p) {
     p.mask |= SettingsPatch::kDebounce;
     p.values.debounceMs = static_cast<uint8_t>(value);
   }
-  if (!readIntField(obj, CHOCPILOT_P("oled_addr"), 0x08, 0x77, value, present, err)) {
-    return invalid(err);
-  }
-  if (present) {
-    p.mask |= SettingsPatch::kOledAddr;
-    p.values.oledAddr = static_cast<uint8_t>(value);
-  }
-#if !defined(CHOCPILOT_NO_SAVER)
   if (member(obj, CHOCPILOT_P("saver")) != nullptr) {
     if (!readStringField(obj, CHOCPILOT_P("saver"), p.saver, sizeof(p.saver), kSaverNameBuf - 1,
                          err)) {
@@ -471,7 +463,6 @@ ParseResult parseSettings(const char* obj, SettingsPatch& p) {
     if (equalsP(p.saver, strlen(p.saver), CHOCPILOT_P("off"))) p.saver[0] = '\0';
     p.mask |= SettingsPatch::kSaver;
   }
-#endif
   return ok();
 }
 
@@ -554,7 +545,6 @@ int8_t base64Value(char c) {
 }
 }  // namespace
 
-#if !defined(CHOCPILOT_NO_ICONS)
 // {"type":"icon","key":3,"offset":128,"data":"<base64>"} albo {"type":"icon","key":3,"clear":true}
 ParseResult parseIcon(const char* obj, IconChunk& ic) {
   FlashText err = nullptr;
@@ -581,9 +571,7 @@ ParseResult parseIcon(const char* obj, IconChunk& ic) {
   ic.len = static_cast<uint8_t>(n);
   return ok();
 }
-#endif
 
-#if !defined(CHOCPILOT_NO_SAVER)
 // {"type":"time","hour":14,"minute":5,"second":30} – second opcjonalne.
 ParseResult parseTime(const char* obj, TimeOfDay& t) {
   FlashText err = nullptr;
@@ -599,7 +587,6 @@ ParseResult parseTime(const char* obj, TimeOfDay& t) {
   t.second = present ? static_cast<uint8_t>(value) : 0;
   return ok();
 }
-#endif
 
 ParseResult parseBinding(const char* obj, uint8_t& slot, FallbackBinding& b) {
   char name[kNameBuf];
@@ -797,7 +784,6 @@ void SettingsPatch::applyTo(Settings& s) const {
   if (mask & kScreensaver) s.screensaverS = values.screensaverS;
   if (mask & kFlip) s.flip = values.flip;
   if (mask & kDebounce) s.debounceMs = values.debounceMs;
-  if (mask & kOledAddr) s.oledAddr = values.oledAddr;
 }
 
 void LedPatch::applyTo(LedSettings& s) const {
@@ -876,18 +862,14 @@ ParseResult parseCommand(const char* line, size_t len, Command& out) {
     out.type = CommandType::TestMode;
     return parseFlag(obj, CHOCPILOT_P("enable"), true, out.flag);
   }
-#if !defined(CHOCPILOT_NO_ICONS)
   if (stringIs(type, CHOCPILOT_P("icon"))) {
     out.type = CommandType::Icon;
     return parseIcon(obj, out.icon);
   }
-#endif
-#if !defined(CHOCPILOT_NO_SAVER)
   if (stringIs(type, CHOCPILOT_P("time"))) {
     out.type = CommandType::Time;
     return parseTime(obj, out.time);
   }
-#endif
   if (stringIs(type, CHOCPILOT_P("leds"))) {
     out.type = CommandType::Leds;
     return parseLeds(obj, out.leds);
@@ -901,7 +883,7 @@ ParseResult parseCommand(const char* line, size_t len, Command& out) {
 }
 
 size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool online,
-                  const I2cDiag* diag, bool encoder, uint8_t leds,
+                  bool encoder, uint8_t leds,
                   const char* const* savers, uint8_t saverCount, uint8_t iconSize) {
   Writer w(buf, cap);
   w.raw(CHOCPILOT_P("{\"type\":\"hello\",\"device\":\"chocpilot\",\"fw\":"));
@@ -928,28 +910,6 @@ size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool
       w.quoted(savers[i], false);
     }
     w.put(']');
-  }
-  if (diag != nullptr) {
-    w.raw(CHOCPILOT_P(",\"oled\":"));
-    if (diag->oledAddr != 0) {
-      w.number(static_cast<uint32_t>(diag->oledAddr));
-    } else {
-      w.raw(CHOCPILOT_P("null"));  // ekran nie odpowiada
-    }
-    w.raw(CHOCPILOT_P(",\"i2c\":["));
-    for (uint8_t i = 0; i < diag->count && i < sizeof(diag->devices); ++i) {
-      if (i > 0) w.put(',');
-      w.number(static_cast<uint32_t>(diag->devices[i]));
-    }
-    w.put(']');
-    if (diag->sdaLevel >= 0 && diag->sclLevel >= 0) {
-      w.raw(CHOCPILOT_P(",\"lines\":{\"sda\":"));
-      w.number(static_cast<int32_t>(diag->sdaLevel));
-      w.raw(CHOCPILOT_P(",\"scl\":"));
-      w.number(static_cast<int32_t>(diag->sclLevel));
-      w.put('}');
-    }
-    if (diag->swapped) w.raw(CHOCPILOT_P(",\"swapped\":true"));
   }
   w.raw(CHOCPILOT_P(",\"max_line\":"));
   w.number(static_cast<uint32_t>(kMaxLineLength));

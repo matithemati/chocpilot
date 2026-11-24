@@ -1,4 +1,4 @@
-// Kolorowy ekran LCD 2" ST7789V 320×240 (ChocPilot v0). Ten sam interfejs co display_oled.h:
+// Ekran Waveshare 2" IPS LCD (ST7789V, 240×320, używany poziomo 320×240):
 // tryby z komend display/flash, ekran offline, tryb testu i wygaszacz.
 #pragma once
 
@@ -39,8 +39,6 @@ class Display {
   void activity(uint32_t nowMs);
   void update(uint32_t nowMs);
 
-  // LCD nie ma diagnostyki I²C – hello bez pól oled/i2c.
-  const I2cDiag* diag() const { return nullptr; }
   // Wygaszacz aktywny (wygaszony ekran albo animacja) – diody LED też gasną.
   bool sleeping() const { return sleeping_ || saving_; }
 

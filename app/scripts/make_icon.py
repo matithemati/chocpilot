@@ -1,4 +1,8 @@
-"""Generuje chocpilot/assets/chocpilot.ico i chocpilot.png z logo rysowanego w kodzie (gui/icons.py)."""
+"""Generuje ikony aplikacji z logo rysowanego w kodzie (gui/icons.py).
+
+chocpilot/assets/chocpilot.png (256 px, okno i zasobnik), chocpilot.ico (Windows, exe)
+oraz chocpilot.icns (macOS, pakiet .app; 1024 px – system sam skaluje).
+"""
 
 from __future__ import annotations
 
@@ -20,11 +24,14 @@ def main() -> int:
     assets = ROOT / "chocpilot" / "assets"
     assets.mkdir(parents=True, exist_ok=True)
     png = app_pixmap(256)
-    ok_png = png.save(str(assets / "chocpilot.png"), "PNG")
-    ok_ico = png.save(str(assets / "chocpilot.ico"), "ICO")
-    print(f"chocpilot.png: {ok_png}, chocpilot.ico: {ok_ico}")
+    results = {
+        "chocpilot.png": png.save(str(assets / "chocpilot.png"), "PNG"),
+        "chocpilot.ico": png.save(str(assets / "chocpilot.ico"), "ICO"),
+        "chocpilot.icns": app_pixmap(1024).save(str(assets / "chocpilot.icns"), "ICNS"),
+    }
+    print(", ".join(f"{name}: {ok}" for name, ok in results.items()))
     del app
-    return 0 if ok_png and ok_ico else 1
+    return 0 if all(results.values()) else 1
 
 
 if __name__ == "__main__":

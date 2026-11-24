@@ -1,4 +1,4 @@
-# ChocPilot v0 – notatki projektowe
+# ChocPilot – notatki projektowe
 
 ## Układ płytki
 
@@ -27,8 +27,8 @@
 
 Budżet: MCU ~25 mA, ekran LCD 2" ~40–60 mA (podświetlenie, regulowane PWM), LED WS2812B do
 ~36 mA każda przy pełnej bieli → 12 × 36 ≈ 430 mA. Razem ponad 500 mA dostępne z portu USB 2.0.
-**Firmware musi ograniczać jasność LED** (np. suma ≤ 300 mA, ok. 70 % bieli) – bezpiecznik
-F1 i tak zadziała przy przeciążeniu, ale port może się wcześniej wyłączyć.
+Firmware ogranicza jasność LED do ok. 1/3 pełnej mocy (ok. 230 mA przy bieli, `leds.cpp`) –
+bezpiecznik F1 i tak zadziała przy przeciążeniu, ale port mógłby się wcześniej wyłączyć.
 
 ## Sygnały
 
@@ -57,7 +57,7 @@ F1 i tak zadziała przy przeciążeniu, ale port może się wcześniej wyłączy
 
 | Element | Dlaczego THT | Wybór |
 |---|---|---|
-| Przełączniki Choc V2 | piny przełącznika | lutowane bezpośrednio w płytkę (bez gniazd hotswap) |
+| Przełączniki Choc V1 | piny przełącznika | lutowane bezpośrednio w płytkę (bez gniazd hotswap) |
 | EC11 | tylko THT | Alps EC11E15244G1 (z przyciskiem) |
 | Suwak | tylko THT | ALPS RS45111A900F (45 mm, liniowy), footprint własny |
 | J2 ekran | kabel PH2.0 z modułu kończy się żeńskimi wtykami 2,54 mm | listwa 1×8 2,54 mm |
@@ -72,12 +72,13 @@ USB-C (USB4105) jest SMD z kołkami THT obudowy – najtrudniejszy element do lu
 biblioteki kiswitch (`SW_Kailh_Choc_V1V2_1.00u`): otwór środkowy Ø5,05 (Choc V2; V1 też
 wchodzi), kołki V1 Ø1,9 na ±5,5 mm, kołek V2 Ø1,6 w (−5; 5,15), piny przełącznika – pady THT
 Ø2,2 / otwór 1,2 mm w (0; −5,9) (pin 1 = kolumna) i (5; −3,8) (pin 2 = anoda diody). Choc V2
-ma piny w tych samych miejscach co V1. Pasują keycapy MX (trzpień V2). Stary footprint
+ma piny w tych samych miejscach co V1. Projekt używa Choc V1 z drukowanymi keycapami
+(`case/chocpilot_keycap.stl`); z Choc V2 trzeba keycapów MX. Stary footprint
 z gniazdem hotswap (`SW_Kailh_Choc_V1V2_Hotswap_1u`) został w bibliotece, nieużywany.
 
 ## Do sprawdzenia przed zamówieniem
 
-1. **Footprint Choc:** wydrukuj warstwę F.Cu 1:1 i przyłóż przełącznik V2 (piny, kołki).
+1. **Footprint Choc:** wydrukuj warstwę F.Cu 1:1 i przyłóż przełącznik Choc V1 (piny, kołki).
    Geometria pochodzi z biblioteki, nie z pomiaru.
 2. **Ekran:** mocowanie modułu 58 × 35 mm w obudowie (otwory w rogach płytki modułu – wymiary
    z rysunku Waveshare lub pomiaru) i długość kabla PH2.0 do J2.
@@ -90,8 +91,8 @@ z gniazdem hotswap (`SW_Kailh_Choc_V1V2_Hotswap_1u`) został w bibliotece, nieu�
 
 ## Firmware i aplikacja
 
-Firmware: środowisko **`chocpilot_v0`** w `firmware/` (opis w głównym README, sekcja
-„ChocPilot v0”): STM32duino + TinyUSB (CDC + HID), matryca z mapą klawiszy z tej płytki,
+Firmware: `firmware/` (środowisko PlatformIO `chocpilot`, opis w głównym README):
+STM32duino + TinyUSB (CDC + HID), matryca z mapą klawiszy z tej płytki (`src/boards/board.h`),
 LCD ST7789V na SPI1, pokrętła na TIM2/TIM3, suwak na ADC PB1, LED przez SPI2, ustawienia
 w emulacji EEPROM, skok do bootloadera DFU komendą `reboot` (`bootloader: true`).
 Protokół rozszerzony o `encoder`, `encoder_key`, `slider` (docs/PROTOCOL.md); w aplikacji każdy
@@ -100,7 +101,7 @@ profil ma akcje dla obu pokręteł (obrót w prawo / w lewo / naciśnięcie) i d
 
 ## Obudowa
 
-- **Obudowa (`case/`):** nowy obrys 114 × 93 mm i otwory M3 jak wyżej, otwory na osie enkoderów,
-  szczelina suwaka, USB-C w prawym górnym rogu górnej krawędzi (oś x = 107,5; gniazdo wystaje 1,2 mm poza płytkę –
-  otwór w ściance na wtyk, ścianka ≤ ok. 1,2 mm albo z wybraniem od środka), dwa otwory w dnie na RESET/BOOT0,
-  przezroczysty / otwarty dolny obrzeże dla podświetlenia.
+Model w `case/` (SolidCraft, opis w [case/README.md](../../case/README.md)): obrys pod płytkę
+114 × 93 mm i otwory M3 jak wyżej, okno ekranu z 4 tulejami M2 na moduł, otwory na osie
+enkoderów, szczelina suwaka, otwór USB-C dopasowany do gniazda (oś x = 107,5), dwa otwory w dnie
+na RESET/BOOT0; dno z półprzezroczystego filamentu rozprasza światło diod.

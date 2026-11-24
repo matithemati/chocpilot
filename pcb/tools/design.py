@@ -1,4 +1,4 @@
-"""ChocPilot v0 – jedno źródło prawdy dla schematu, PCB i BOM.
+"""ChocPilot (rewizja płytki v0) – jedno źródło prawdy dla schematu, PCB i BOM.
 
 Każdy element: oznaczenie, symbol z biblioteki KiCad, footprint, mapa pin → sieć
 (None = pin niepodłączony, na schemacie znacznik „no connect”), położenie na płytce

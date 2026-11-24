@@ -90,7 +90,7 @@ def _badge_style(badge: QLabel, color: str) -> None:
 
 
 class LabelEdit(QWidget):
-    """Etykieta z licznikiem znaków (OLED: 7 znaków) i podglądem tekstu na ekranie."""
+    """Etykieta z licznikiem znaków i podglądem tekstu na ekranie (krój ASCII jak w firmware)."""
 
     changed = Signal(str)
 
@@ -100,7 +100,7 @@ class LabelEdit(QWidget):
         self.edit.setMaxLength(LABEL_CHARS)
         self.edit.setPlaceholderText(tr("np. Spotify"))
         self.counter = label("", "muted")
-        self.preview = label("", "oledPreview")
+        self.preview = label("", "lcdPreview")
         head = QHBoxLayout()
         head.addWidget(label(tr("Etykieta"), "lbl"))
         head.addStretch(1)
@@ -572,9 +572,9 @@ class ProfileEditor(QWidget):
         self.processes.setMinimumHeight(140)
         self.add_combo = combo()
         self.add_combo.setEditable(True)
-        self.add_combo.lineEdit().setPlaceholderText(
-            tr("np. {name}").format(name=osinfo.example_process("app"))
-        )
+        add_edit = self.add_combo.lineEdit()
+        assert add_edit is not None  # lista edytowalna
+        add_edit.setPlaceholderText(tr("np. {name}").format(name=osinfo.example_process("app")))
         self.add_combo.setMinimumContentsLength(10)
         refresh = button("", "refresh")
         refresh.setToolTip(tr("Odśwież listę uruchomionych procesów"))
@@ -626,7 +626,6 @@ class ProfileEditor(QWidget):
         )
         lg.addWidget(self.led_custom)
         lg.addWidget(self.led_color)
-        self.led_group.setVisible(False)
 
         title_col = QVBoxLayout()
         title_col.setSpacing(0)
@@ -668,10 +667,6 @@ class ProfileEditor(QWidget):
         self.led_custom.blockSignals(False)
         self.led_color.set_color(profile.led_color or LED_SWATCHES[0])
         self.led_color.setEnabled(profile.led_color is not None)
-
-    def set_leds_available(self, available: bool) -> None:
-        """Sekcja koloru LED tylko dla płytek z podświetleniem (ChocPilot v0)."""
-        self.led_group.setVisible(available)
 
     def _led_toggled(self, checked: bool) -> None:
         self.led_color.setEnabled(checked)

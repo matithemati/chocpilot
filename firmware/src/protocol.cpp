@@ -9,23 +9,15 @@ namespace chocpilot {
 void Link::begin() { hal::serialBegin(); }
 
 void Link::poll(LineHandler handler) {
-#if defined(CHOCPILOT_BOARD_V0)
   // Seria komend (np. ikony przy zmianie profilu, ok. 8 KB): gdy bufor CDC się opróżni, od razu
   // obsługujemy USB (następny pakiet 64 B może już czekać) zamiast wracać do pętli. Odbiór i tak
   // ogranicza tempo pakietów USB (ok. 1 na ramkę 1 ms) – ważniejsze jest, że ekran nie jest
   // przerysowywany w trakcie serii (Display: kSettleMs).
   int budget = 4096;
-#else
-  int budget = 512;  // Pro Micro: ogranicz pracę w jednym obiegu pętli (skan klawiszy)
-#endif
   while (budget-- > 0) {
     if (hal::serialAvailable() <= 0) {
-#if defined(CHOCPILOT_BOARD_V0)
       hal::poll();
       if (hal::serialAvailable() <= 0) break;
-#else
-      break;
-#endif
     }
     const int c = hal::serialRead();
     if (c < 0) break;
@@ -60,7 +52,7 @@ void Link::sendRaw(size_t len) {
 }
 
 void Link::sendHello(bool online) {
-  sendRaw(buildHello(tx_, kTxCap, board::kBoardId, CHOCPILOT_FW_VERSION, online, diag,
+  sendRaw(buildHello(tx_, kTxCap, board::kBoardId, CHOCPILOT_FW_VERSION, online,
                      board::kHasEncoders, board::kLedCount, savers, saverCount, iconSize));
 }
 

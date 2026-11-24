@@ -69,12 +69,10 @@ EN: dict[str, str] = {
     "Profil ChocPilot (*.json)": "ChocPilot profile (*.json)",
     "Nie udało się zaimportować profilu:": "Could not import the profile:",
     "Nie udało się zapisać:": "Could not save:",
-    "Przełączyć urządzenie w tryb wgrywania firmware?\nPro Micro uruchomi bootloader Caterina na ok. 8 s (nowy port COM) – wtedy wgraj firmware: pio run -e promicro -t upload.": "Switch the device to firmware upload mode?\nKB2040 will appear as an RPI-RP2 drive, XIAO ESP32-S3 as a download port.",
-    'Macropad 2×4 (Kailh Choc) z ekranem OLED 2,42" albo LCD 2".': '2×4 macropad (Kailh Choc) with a 2.42" OLED or 2" LCD display.',
-    "Ekran nie odpowiada na I²C – szczegóły w zakładce Dziennik": "The display does not respond on I²C – see the Log page for details",
+    "Przełączyć urządzenie w tryb wgrywania firmware?\nPłytka odłączy się od aplikacji i uruchomi bootloader USB DFU (STM32 BOOTLOADER). Wgraj firmware (firmware/flash.ps1 albo pio run -t upload) – po wgraniu płytka sama wróci do pracy.": "Switch the device to firmware upload mode?\nThe board disconnects from the app and starts the USB DFU bootloader (STM32 BOOTLOADER). Upload the firmware (firmware/flash.ps1 or pio run -t upload) – the board restarts on its own afterwards.",
+    'Macropad 2×4 (Kailh Choc) z ekranem LCD 2" IPS, pokrętłami i suwakiem.': '2×4 macropad (Kailh Choc) with a 2" IPS LCD, encoders and a slider.',
     "Błąd": "Error",
     # podgląd urządzenia
-    "Ekran OLED": "OLED display",
     "Wybierz ikonę": "Choose an icon",
     "Szukaj (np. play, folder, kot, music)…": "Search (e.g. play, folder, cat, music)…",
     "Wszystkie": "All",
@@ -181,6 +179,8 @@ EN: dict[str, str] = {
     "Własny kolor podświetlenia w tym profilu": "Custom lighting color for this profile",
     "Kolor diod, gdy ten profil jest aktywny (tryby stały i oddychanie). Bez zaznaczenia – kolor z ustawień urządzenia.": "LED color while this profile is active (solid and breathing modes). Unchecked: the color from the device settings.",
     'Ekran LCD 2"': '2" LCD display',
+    "Wystąpił nieoczekiwany błąd. Aplikacja działa dalej, szczegóły są w dzienniku:": "An unexpected error occurred. The app keeps running; details are in the log:",
+    "ChocPilot potrzebuje uprawnienia „Dostępność”, żeby wysyłać skróty klawiszowe, wpisywać tekst i przełączać okna.\n\nUstawienia systemowe → Prywatność i ochrona → Dostępność → włącz ChocPilot, a potem uruchom aplikację ponownie.": "ChocPilot needs the Accessibility permission to send keyboard shortcuts, type text and switch windows.\n\nSystem Settings → Privacy & Security → Accessibility → turn on ChocPilot, then restart the app.",
     "Siatka etykiet 2×4": "2×4 label grid",
     "Duża nazwa profilu": "Large profile name",
     "Klawisz": "Key",
@@ -192,7 +192,7 @@ EN: dict[str, str] = {
     "Kolor": "Color",
     "Własny…": "Custom…",
     "Kolor klawisza": "Key color",
-    # pokrętła i suwak (ChocPilot v0)
+    # pokrętła i suwak
     "Pokrętło": "Knob",
     "Suwak": "Slider",
     "Suwak 45 mm": "45 mm slider",
@@ -411,13 +411,13 @@ def action_summary(action: ActionBase | None) -> str:
     if kind == "media":
         from ..core.actions.builtin import MEDIA_LABELS
 
-        return tr(str(MEDIA_LABELS.get(data.get("key"), data.get("key"))))
+        return tr(str(MEDIA_LABELS.get(str(data.get("key")), data.get("key"))))
     if kind == "app_volume":
         modes = {"up": "Głośniej", "down": "Ciszej", "mute": "Wycisz/włącz"}
-        return f"{data.get('process') or '?'} · {tr(modes.get(data.get('mode'), ''))}"
+        return f"{data.get('process') or '?'} · {tr(modes.get(str(data.get('mode')), ''))}"
     if kind == "scroll":
         dirs = {"up": "W górę", "down": "W dół", "left": "W lewo", "right": "W prawo"}
-        return f"{tr('Przewijanie')} · {tr(dirs.get(data.get('direction'), ''))}"
+        return f"{tr('Przewijanie')} · {tr(dirs.get(str(data.get('direction')), ''))}"
     if kind == "macro":
         return f"{tr('Makro')} ({len(data.get('steps') or [])} {tr('kroków')})"
     if kind == "profile":
@@ -431,7 +431,7 @@ def action_summary(action: ActionBase | None) -> str:
         return f"{tr('Warstwa')}: {data.get('profile') or '—'}"
     if kind == "system":
         cmds = {"lock": "Zablokuj komputer", "screen_off": "Wyłącz ekran"}
-        return tr(cmds.get(data.get("command"), tr("System")))
+        return tr(cmds.get(str(data.get("command")), tr("System")))
     if kind == "shell":
         return f"{data.get('shell')}: {str(data.get('command') or '')[:24]}"
     return tr(action.label) if action.label else action.type

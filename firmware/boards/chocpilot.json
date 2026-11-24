@@ -21,7 +21,7 @@
     "cmsis",
     "stm32cube"
   ],
-  "name": "ChocPilot v0 (STM32F072CBT6)",
+  "name": "ChocPilot (STM32F072CBT6)",
   "upload": {
     "maximum_ram_size": 16384,
     "maximum_size": 131072,

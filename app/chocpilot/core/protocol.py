@@ -23,14 +23,12 @@ LABEL_CHARS = 10  # na ekranie 1–2 wiersze po 6 znaków w komórce siatki
 KEY_ROWS = 2
 KEY_COLS = 4
 KEY_COUNT = KEY_ROWS * KEY_COLS
-# ChocPilot v0: dwa pokrętła EC11 z przyciskami (1 – górne, 2 – dolne) i suwak 0–100.
+# Dwa pokrętła EC11 z przyciskami (1 – górne, 2 – dolne) i suwak 0–100.
 ENCODER_COUNT = 2
 SLIDER_MAX = 100
 
-BOARD_NAMES = {"promicro": "Pro Micro", "chocpilot_v0": "ChocPilot v0 (STM32F072)"}
-# Rodzaj ekranu płytki: "oled" = SSD1309 128×64 (I²C), "lcd" = kolorowy ST7789V 320×240 (SPI).
-BOARD_SCREENS = {"chocpilot_v0": "lcd"}
-# Płytki z małą pamięcią zgłaszają w hello krótszy limit linii (max_line), np. Pro Micro: 272 B.
+BOARD_NAMES = {"chocpilot": "ChocPilot (STM32F072)"}
+# Limit linii z hello (max_line, ChocPilot: 272 B); aplikacja dzieli dłuższe komendy.
 MIN_LINE_LENGTH = 128
 
 MEDIA_KEYS = ("play_pause", "next", "prev", "stop", "vol_up", "vol_down", "mute")
@@ -89,7 +87,7 @@ _POLISH = str.maketrans(
 
 
 def transliterate(text: str) -> str:
-    """Zamienia tekst na ASCII (czcionki OLED nie mają polskich znaków)."""
+    """Zamienia tekst na ASCII (krój ekranu 5×7 nie ma polskich znaków)."""
     text = text.translate(_POLISH)
     normalized = unicodedata.normalize("NFKD", text)
     ascii_text = "".join(c for c in normalized if ord(c) < 128 and not unicodedata.combining(c))
@@ -158,7 +156,7 @@ def msg_flash(text: str, key: int | None = None, ms: int = 1000) -> dict[str, An
     return msg
 
 
-# Podświetlenie LED (ChocPilot v0): tryby i zakresy komendy leds (jak firmware).
+# Podświetlenie LED: tryby i zakresy komendy leds (jak firmware).
 LED_MODES = ("off", "status", "static", "breathe", "rainbow")
 LED_SPEED_MIN, LED_SPEED_MAX = 1, 10
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -241,8 +239,7 @@ SETTINGS_FIELDS = {
     "screensaver_s": (int, 0, 65535),
     "flip": (bool, None, None),
     "debounce_ms": (int, 1, 50),
-    "oled_addr": (int, 0x08, 0x77),
-    "saver": (str, None, None),  # animacja wygaszacza ("off" = wygaszony ekran), tylko LCD
+    "saver": (str, None, None),  # animacja wygaszacza ("off" = wygaszony ekran)
 }
 SAVER_OFF = "off"
 _SAVER_NAME = re.compile(r"^[a-z0-9_]{1,11}$")
@@ -348,35 +345,16 @@ class DeviceInfo:
     board: str
     keys: int = KEY_COUNT
     encoder: bool = False
-    leds: int = 0  # liczba diod podświetlenia (0 = brak, np. Pro Micro)
+    leds: int = 0  # liczba diod podświetlenia (0 = brak)
     savers: tuple[str, ...] = ()  # animacje wygaszacza w urządzeniu (pusto = tylko wygaszony ekran)
-    icon_size: int = 0  # ikony klawiszy na ekranie (0 = tylko etykiety, np. OLED)
+    icon_size: int = 0  # ikony klawiszy na ekranie (0 = tylko etykiety)
     hid: bool = True
-    # Diagnostyka I²C (firmware ≥ 1.0.1): has_diag=False – starszy firmware bez tych pól.
-    has_diag: bool = False
-    oled_addr: int | None = None  # None = ekran nie odpowiada
-    i2c_devices: tuple[int, ...] = ()
-    # Stan linii bez wewnętrznego pull-upu (1 = wysoki, 0 = niski, None = nie mierzono)
-    sda_level: int | None = None
-    scl_level: int | None = None
-    swapped: bool = False  # ekran znaleziony po zamianie SDA/SCL
-    # Maksymalna długość linii do urządzenia (z \n); pole max_line tylko na małych płytkach.
+    # Maksymalna długość linii do urządzenia (z \n), pole max_line w hello.
     max_line: int = MAX_LINE_LENGTH
 
     @property
     def board_name(self) -> str:
         return BOARD_NAMES.get(self.board, self.board)
-
-    @property
-    def screen(self) -> str:
-        """Rodzaj ekranu: "lcd" (Waveshare 2" ST7789V) albo "oled" (SSD1309)."""
-        return BOARD_SCREENS.get(self.board, "oled")
-
-    @property
-    def oled_status(self) -> str:
-        if not self.has_diag:
-            return "?"
-        return f"0x{self.oled_addr:02X}" if self.oled_addr is not None else "brak"
 
 
 @dataclass(frozen=True)
@@ -448,12 +426,6 @@ def _int(data: dict[str, Any], key: str, default: int | None = None) -> int:
     return value
 
 
-def _level(data: dict[str, Any], line: str) -> int | None:
-    lines = data.get("lines")
-    value = lines.get(line) if isinstance(lines, dict) else None
-    return value if value in (0, 1) and not isinstance(value, bool) else None
-
-
 def _saver_names(data: dict[str, Any]) -> tuple[str, ...]:
     value = data.get("savers")
     if not isinstance(value, list):
@@ -492,14 +464,6 @@ def parse_device_message(data: dict[str, Any]) -> DeviceMessage | None:
             savers=_saver_names(data),
             icon_size=data["icon"] if data.get("icon") == 32 else 0,
             hid=bool(data.get("hid", True)),
-            has_diag="oled" in data,
-            oled_addr=oled if isinstance(oled := data.get("oled"), int) else None,
-            i2c_devices=tuple(
-                a for a in data.get("i2c", []) or [] if isinstance(a, int) and 0 <= a < 128
-            ),
-            sda_level=_level(data, "sda"),
-            scl_level=_level(data, "scl"),
-            swapped=data.get("swapped") is True,
             max_line=_max_line(data),
         )
     if kind == "key":

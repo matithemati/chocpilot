@@ -1,4 +1,4 @@
-"""Okno symulatora ChocPilot: 8 klawiszy 2×4 i podgląd ekranu (OLED 128×64 albo LCD 320×240)."""
+"""Okno symulatora ChocPilot: klawisze 2×4, podgląd LCD 320×240, pokrętła, suwak i LED."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.protocol import BOARD_SCREENS, ENCODER_COUNT, KEY_COLS, KEY_COUNT, SLIDER_MAX
+from ..core.protocol import ENCODER_COUNT, KEY_COLS, KEY_COUNT, SLIDER_MAX
 from ..core.simulator import SimulatedDevice
 from .icons import app_icon
-from .oled import OledView
+from .lcd import LcdView
 
 
 class LedStrip(QWidget):
@@ -62,7 +62,7 @@ class SimulatorWindow(QWidget):
         self.device = device
         self.setWindowTitle("ChocPilot – symulator urządzenia")
         self.setWindowIcon(app_icon("connected"))
-        self.oled = OledView(scale=3, screen_type=BOARD_SCREENS.get(device.board, "oled"))
+        self.lcd = LcdView()
 
         grid = QGridLayout()
         for k in range(1, KEY_COUNT + 1):
@@ -80,13 +80,11 @@ class SimulatorWindow(QWidget):
         self.hid.setPlaceholderText("Tryb awaryjny HID (offline): wysłane skróty pojawią się tutaj")
 
         layout = QVBoxLayout(self)
-        layout.addWidget(self.oled, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.lcd, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addLayout(grid, 1)
         self.led_strip = LedStrip()
-        self.led_strip.setVisible(bool(device.led_count))
         layout.addWidget(self.led_strip)
-        if device.has_controls:
-            layout.addLayout(self._controls(device))
+        layout.addLayout(self._controls(device))
         layout.addWidget(self.status)
         layout.addWidget(self.hid)
         self.resize(440, 520)
@@ -99,7 +97,7 @@ class SimulatorWindow(QWidget):
 
     @staticmethod
     def _controls(device: SimulatedDevice) -> QHBoxLayout:
-        """Pokrętła (↺ / naciśnięcie / ↻) i suwak – ChocPilot v0."""
+        """Pokrętła (↺ / naciśnięcie / ↻) i suwak – ChocPilot."""
         row = QHBoxLayout()
         for i in range(1, ENCODER_COUNT + 1):
             for text, delta in ((f"E{i} ↺", -1), (f"E{i} ●", 0), (f"E{i} ↻", 1)):
@@ -118,12 +116,9 @@ class SimulatorWindow(QWidget):
         return row
 
     def _refresh(self) -> None:
-        self.oled.show_screen(self.device.screen())
-        if self.device.led_count:
-            self.led_strip.set_colors(self.device.led_colors())
-        self.status.setText(
-            f"Płytka: {self.device.board} • {'online' if self.device.online else 'OFFLINE (HID)'}"
-        )
+        self.lcd.show_screen(self.device.screen())
+        self.led_strip.set_colors(self.device.led_colors())
+        self.status.setText("online" if self.device.online else "OFFLINE (HID)")
         if len(self.device.hid_log) != self._hid_count:
             for line in self.device.hid_log[self._hid_count :]:
                 self.hid.appendPlainText(line)

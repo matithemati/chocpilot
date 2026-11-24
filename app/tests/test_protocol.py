@@ -93,10 +93,10 @@ def test_set_fallback_message() -> None:
 
 def test_parse_device_messages() -> None:
     info = protocol.parse_device_message(
-        {"type": "hello", "device": "chocpilot", "fw": "1.0.0", "board": "promicro", "keys": 8}
+        {"type": "hello", "device": "chocpilot", "fw": "1.0.0", "board": "chocpilot", "keys": 8}
     )
     assert isinstance(info, DeviceInfo)
-    assert info.board_name == "Pro Micro" and info.keys == 8 and not info.encoder
+    assert info.board_name == "ChocPilot (STM32F072)" and info.keys == 8 and not info.encoder
     assert protocol.parse_device_message(
         {"type": "key", "key": 8, "action": "up", "t": 5}
     ) == KeyEvent(8, False, 5)
@@ -122,41 +122,11 @@ def test_parse_device_message_invalid(msg: dict) -> None:
         protocol.parse_device_message(msg)
 
 
-def test_hello_display_diagnostics() -> None:
-    base = {"type": "hello", "device": "chocpilot", "fw": "1.0.1", "board": "promicro"}
-    old = protocol.parse_device_message(base)
-    assert isinstance(old, DeviceInfo) and not old.has_diag and old.oled_status == "?"
-    found = protocol.parse_device_message({**base, "oled": 0x3D, "i2c": [0x3D, 0x50]})
-    assert isinstance(found, DeviceInfo)
-    assert found.oled_addr == 0x3D and found.i2c_devices == (0x3D, 0x50)
-    assert found.oled_status == "0x3D"
-    missing = protocol.parse_device_message({**base, "oled": None, "i2c": []})
-    assert isinstance(missing, DeviceInfo)
-    assert missing.has_diag and missing.oled_addr is None and missing.oled_status == "brak"
-
-
-def test_hello_line_levels_and_swap() -> None:
-    info = protocol.parse_device_message(
-        {
-            "type": "hello",
-            "device": "chocpilot",
-            "fw": "1.0.3",
-            "board": "promicro",
-            "oled": None,
-            "i2c": [],
-            "lines": {"sda": 0, "scl": 1},
-            "swapped": True,
-        }
-    )
-    assert isinstance(info, DeviceInfo)
-    assert info.sda_level == 0 and info.scl_level == 1 and info.swapped
-
-
-def test_hello_pro_micro_max_line() -> None:
-    base = {"type": "hello", "device": "chocpilot", "fw": "1.0.4", "board": "promicro"}
+def test_hello_max_line() -> None:
+    base = {"type": "hello", "device": "chocpilot", "fw": "1.0.4", "board": "chocpilot"}
     info = protocol.parse_device_message({**base, "max_line": 272})
     assert isinstance(info, DeviceInfo)
-    assert info.board_name == "Pro Micro" and info.max_line == 272
+    assert info.max_line == 272
     for bad in ("272", True, None):
         other = protocol.parse_device_message({**base, "max_line": bad})
         assert isinstance(other, DeviceInfo) and other.max_line == protocol.MAX_LINE_LENGTH

@@ -1,4 +1,4 @@
-"""Podświetlenie LED (ChocPilot v0): protokół, model ustawień, kontroler, symulator, efekty."""
+"""Podświetlenie LED: protokół, model ustawień, kontroler, symulator, efekty."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def test_msg_leds_fields_and_validation() -> None:
 
 
 def test_hello_led_count() -> None:
-    hello = {"type": "hello", "device": "chocpilot", "board": "chocpilot_v0", "leds": 12}
+    hello = {"type": "hello", "device": "chocpilot", "board": "chocpilot", "leds": 12}
     info = protocol.parse_device_message(hello)
     assert isinstance(info, DeviceInfo) and info.leds == 12
     info = protocol.parse_device_message({**hello, "leds": True})
@@ -67,7 +67,6 @@ def test_led_settings_defaults_and_validation() -> None:
         5,
         True,
     )
-    assert config.settings.device.leds_available is False
     assert LedSettings(color="#ABCDEF").color == "#abcdef"
     with pytest.raises(ValidationError):
         LedSettings(color="blue")
@@ -108,7 +107,7 @@ def make_controller(
 
 
 def test_connect_sends_led_settings_then_profile_color(sync_executor) -> None:
-    controller, transport, config = make_controller("chocpilot_v0", 12, sync_executor)
+    controller, transport, config = make_controller("chocpilot", 12, sync_executor)
     sent = transport.of_type("leds")
     assert sent[0]["mode"] == "status" and "save" not in sent[0] and "id" in sent[0]
     # po pełnych ustawieniach kolor aktywnego profilu (bez zapisu)
@@ -120,7 +119,9 @@ def test_connect_sends_led_settings_then_profile_color(sync_executor) -> None:
 
 
 def test_board_without_leds_gets_no_led_commands(sync_executor) -> None:
-    controller, transport, config = make_controller("promicro", 0, sync_executor)
+    controller, transport, config = make_controller(
+        "chocpilot", 0, sync_executor
+    )  # firmware bez LED
     assert transport.of_type("leds") == []
     controller.preview_leds(LedSettings(mode="rainbow"))
     controller.restore_leds()
@@ -128,7 +129,7 @@ def test_board_without_leds_gets_no_led_commands(sync_executor) -> None:
 
 
 def test_settings_change_resends_profile_color_last(sync_executor) -> None:
-    controller, transport, config = make_controller("chocpilot_v0", 12, sync_executor)
+    controller, transport, config = make_controller("chocpilot", 12, sync_executor)
     controller.switch_profile("Gry")
     transport.sent.clear()
     config.settings.device.leds = LedSettings(mode="breathe", color="#2979ff", speed=8)
@@ -141,7 +142,7 @@ def test_settings_change_resends_profile_color_last(sync_executor) -> None:
 
 
 def test_preview_is_not_saved_and_restore_resends(sync_executor) -> None:
-    controller, transport, config = make_controller("chocpilot_v0", 12, sync_executor)
+    controller, transport, config = make_controller("chocpilot", 12, sync_executor)
     transport.sent.clear()
     controller.preview_leds(LedSettings(mode="rainbow", brightness=40))
     preview = transport.of_type("leds")[-1]
@@ -158,7 +159,7 @@ def test_preview_is_not_saved_and_restore_resends(sync_executor) -> None:
 def test_simulator_applies_leds_like_firmware() -> None:
     now = [0.0]
     replies: list[dict] = []
-    device = SimulatedDevice(board="chocpilot_v0", clock=lambda: now[0], emit=replies.append)
+    device = SimulatedDevice(clock=lambda: now[0], emit=replies.append)
     now[0] = 10.0
     device.handle({"type": "hello"})
     assert replies[-1]["leds"] == 12
@@ -174,14 +175,6 @@ def test_simulator_applies_leds_like_firmware() -> None:
 
     device.handle({"type": "leds", "id": 4, "mode": "disco"})
     assert replies[-1]["type"] == "error" and replies[-1]["id"] == 4
-
-
-def test_simulator_promicro_has_no_leds() -> None:
-    replies: list[dict] = []
-    device = SimulatedDevice(board="promicro", emit=replies.append)
-    device.handle({"type": "hello"})
-    assert "leds" not in replies[-1]
-    assert device.led_colors() == []
 
 
 # --------------------------------------------------------------------------- efekty

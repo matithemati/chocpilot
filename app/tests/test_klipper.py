@@ -287,7 +287,7 @@ def make_controller(sync_executor) -> tuple[Controller, FakeTransport, FakeClien
     transport.connect()
     controller.handle_state(
         ConnectionState.CONNECTED,
-        DeviceInfo("chocpilot", "1.1.0", "chocpilot_v0", encoder=True),
+        DeviceInfo("chocpilot", "1.1.0", "chocpilot", encoder=True),
         "COM9",
     )
     return controller, transport, client, clock

@@ -90,7 +90,7 @@ def test_icon_chunks_reassemble() -> None:
         protocol.msgs_icon(9, payload)
     with pytest.raises(protocol.ProtocolError):
         protocol.msgs_icon(1, payload[:-1])
-    hello = {"type": "hello", "device": "chocpilot", "board": "chocpilot_v0", "icon": 32}
+    hello = {"type": "hello", "device": "chocpilot", "board": "chocpilot", "icon": 32}
     info = protocol.parse_device_message(hello)
     assert isinstance(info, DeviceInfo) and info.icon_size == 32
     info = protocol.parse_device_message({**hello, "icon": 64})
@@ -112,7 +112,7 @@ def connect(board_icons: int, sync_executor) -> tuple[Controller, FakeTransport,
     transport.connect()
     controller.handle_state(
         ConnectionState.CONNECTED,
-        DeviceInfo("chocpilot", "1.1.0", "chocpilot_v0", icon_size=board_icons),
+        DeviceInfo("chocpilot", "1.1.0", "chocpilot", icon_size=board_icons),
         "COM9",
     )
     return controller, transport, config
@@ -139,7 +139,7 @@ def test_icons_synced_once_and_cleared_after_connect(sync_executor) -> None:
     assert transport.of_type("icon") == [{"type": "icon", "key": 2, "clear": True}]
 
 
-def test_no_icons_for_oled_and_klipper_grid(sync_executor) -> None:
+def test_no_icons_without_firmware_support_and_klipper_grid(sync_executor) -> None:
     controller, transport, config = connect(0, sync_executor)
     assert transport.of_type("icon") == []
 
@@ -163,7 +163,7 @@ def test_simulator_reassembles_icons_and_preview_draws_them(lib) -> None:
     from chocpilot.gui import lcd
 
     now = [0.0]
-    device = SimulatedDevice(board="chocpilot_v0", clock=lambda: now[0])
+    device = SimulatedDevice(clock=lambda: now[0])
     now[0] = 10.0  # po ekranie startowym
     replies: list[dict] = []
     device.emit = replies.append

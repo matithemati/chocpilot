@@ -320,7 +320,7 @@ def main():
            [Sym('title_block'), [Sym('title'), 'ChocPilot v0'], [Sym('date'), '2026-11-04'],
             [Sym('rev'), '0'], [Sym('comment'), 1, 'Makropad 2×4 Kailh Choc V2, LCD 2" SPI ST7789V, 2× EC11, suwak, 12× WS2812B'],
             [Sym('comment'), 2, 'MCU STM32F072CBT6 (LQFP-48), USB-C, LDO TPS73633'],
-            [Sym('comment'), 3, 'Wygenerowano: pcb/chocpilot-v0/tools/gen_sch.py (źródło: design.py)']],
+            [Sym('comment'), 3, 'Wygenerowano: pcb/tools/gen_sch.py (źródło: design.py)']],
            [Sym('lib_symbols')] + [lib_cache[k] for k in sorted(lib_cache)]]
     sch += items
     sch.append([Sym('sheet_instances'), [Sym('path'), '/', [Sym('page'), '1']]])

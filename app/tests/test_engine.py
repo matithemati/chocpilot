@@ -22,7 +22,7 @@ def make_controller(
     controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
     transport.connect()
     controller.handle_state(
-        ConnectionState.CONNECTED, DeviceInfo("chocpilot", "1.0.0", "promicro"), "COM7"
+        ConnectionState.CONNECTED, DeviceInfo("chocpilot", "1.0.0", "chocpilot"), "COM7"
     )
     return controller, transport
 
@@ -59,7 +59,7 @@ def test_connect_pro_micro_splits_fallback(platform, clock, sync_executor) -> No
     transport.connect()
     controller.handle_state(
         ConnectionState.CONNECTED,
-        DeviceInfo("chocpilot", "1.0.4", "promicro", max_line=272),
+        DeviceInfo("chocpilot", "1.0.4", "chocpilot", max_line=272),
         "COM4",
     )
     parts = transport.of_type("set_fallback")
@@ -185,28 +185,3 @@ def test_compute_fallback_from_profile() -> None:
     config.settings.fallback.from_profile = False
     bindings = {str(b.slot): b for b in compute_fallback(profile, config.settings.fallback)}
     assert set(bindings) == {"1", "5", "6", "7", "8"}
-
-
-def test_missing_display_is_logged(platform, clock, sync_executor, caplog) -> None:
-    config = Config()
-    config.ensure_valid()
-    transport = FakeTransport()
-    controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
-    transport.connect()
-    info = DeviceInfo("chocpilot", "1.0.1", "promicro", has_diag=True, oled_addr=None)
-    controller.handle_state(ConnectionState.CONNECTED, info, "COM7")
-    assert "Ekran OLED nie odpowiada" in caplog.text
-
-
-def test_low_line_is_explained(platform, clock, sync_executor, caplog) -> None:
-    config = Config()
-    config.ensure_valid()
-    transport = FakeTransport()
-    controller = Controller(config, transport, platform, executor=sync_executor, clock=clock)
-    transport.connect()
-    info = DeviceInfo(
-        "chocpilot", "1.0.3", "promicro", has_diag=True, oled_addr=None, sda_level=0, scl_level=1
-    )
-    controller.handle_state(ConnectionState.CONNECTED, info, "COM3")
-    assert "Linia SDA ma stan niski" in caplog.text
-    assert "Linia SCL" not in caplog.text

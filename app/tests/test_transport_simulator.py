@@ -26,21 +26,20 @@ class PortInfo:
 def test_candidate_ports_prefers_product_name() -> None:
     ports = [
         PortInfo("COM1", vid=0x1234, description="Bluetooth"),
-        PortInfo("COM5", vid=0x1B4F, pid=0x9206, description="USB Serial Device"),
-        PortInfo("COM9", vid=0x1B4F, pid=0x9206, product="ChocPilot"),
+        PortInfo("COM5", vid=0x1209, pid=0x0001, description="USB Serial Device"),
+        PortInfo("COM9", vid=0x1209, pid=0x0001, product="ChocPilot"),
         PortInfo("COM7", vid=0x303A),  # ESP32 – nie ChocPilot
     ]
     assert candidate_ports(ports) == ["COM9", "COM5"]
 
 
-def test_candidate_ports_pro_micro_only_application_pids() -> None:
+def test_candidate_ports_only_chocpilot_ids() -> None:
     ports = [
-        PortInfo("COM4", vid=0x1B4F, pid=0x9206),  # Pro Micro 5 V (program)
-        PortInfo("COM5", vid=0x1B4F, pid=0x9205),  # bootloader Caterina – pomijany
+        PortInfo("COM4", vid=0x1209, pid=0x0001),  # ChocPilot (firmware)
+        PortInfo("COM5", vid=0x1209, pid=0x0002),  # inne urządzenie pid.codes – pomijane
         PortInfo("COM6", vid=0x2341, pid=0x0043),  # Arduino Uno – pomijane (reset po otwarciu)
-        PortInfo("COM8", vid=0x2341, pid=0x8036),  # klon z bootloaderem Leonardo
     ]
-    assert candidate_ports(ports) == ["COM4", "COM8"]
+    assert candidate_ports(ports) == ["COM4"]
 
 
 class FakeSerial:
@@ -114,7 +113,7 @@ def test_serial_transport_detects_and_reconnects() -> None:
         assert wait_for(lambda: transport.connected)
         assert transport.port_name == "COM9"
         assert transport.device_info is not None
-        assert transport.device_info.board_name == "Pro Micro"
+        assert transport.device_info.board_name == "ChocPilot (STM32F072)"
         assert device.online
 
         device.press(3)
@@ -197,17 +196,17 @@ def test_simulator_transport_end_to_end() -> None:
     assert device.screen().kind in ("flash", "splash")
 
 
-def test_simulated_pro_micro_needs_split_fallback() -> None:
+def test_simulated_device_needs_split_fallback() -> None:
     out: list[dict[str, Any]] = []
-    device = SimulatedDevice(board="promicro", emit=out.append)
+    device = SimulatedDevice(emit=out.append)
     device.handle_line(protocol.encode(protocol.msg_hello("x")))
-    assert out[-1]["board"] == "promicro" and out[-1]["max_line"] == 272
+    assert out[-1]["board"] == "chocpilot" and out[-1]["max_line"] == 272
 
     bindings = [protocol.FallbackBinding(i, ("ctrl", "shift", "alt"), "f12") for i in range(1, 9)]
     device.handle_line(protocol.encode(protocol.msg_set_fallback(bindings)))
     assert out[-1] == {"type": "error", "msg": "line too long"}
 
-    for i, message in enumerate(protocol.msgs_set_fallback(bindings, device.max_line)):
+    for i, message in enumerate(protocol.msgs_set_fallback(bindings, 272)):
         device.handle_line(protocol.encode({**message, "id": i}))
         assert out[-1] == {"type": "ack", "id": i}
     assert set(device.fallback) == {str(i) for i in range(1, 9)}

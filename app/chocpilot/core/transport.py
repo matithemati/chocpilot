@@ -15,16 +15,10 @@ from .protocol import DeviceInfo, ProtocolError
 
 log = logging.getLogger("chocpilot.transport")
 
-# Nazwa produktu USB „ChocPilot” ma pierwszeństwo. Zapasowo VID:PID Pro Micro (ATmega32U4):
-# tylko PID-y programu, nigdy bootloadera Caterina (1B4F:9205 / 9203,
-# 2341:0036 / 0037) – bajty „hello” byłyby dla niego komendami (np. „e” = kasowanie flash).
-# Inne płytki Arduino (np. Uno) pomijamy też dlatego, że otwarcie portu je resetuje.
+# Nazwa produktu USB „ChocPilot” ma pierwszeństwo, zapasowo VID:PID firmware (pid.codes).
+# Bootloader DFU (0483:DF11) nie jest portem szeregowym, więc nie pojawia się na liście.
 KNOWN_VID_PIDS = {
-    (0x1B4F, 0x9206): "SparkFun Pro Micro 5 V",
-    (0x1B4F, 0x9204): "SparkFun Pro Micro 3,3 V",
-    (0x2341, 0x8036): "Arduino Leonardo (klon Pro Micro)",
-    (0x2341, 0x8037): "Arduino Micro (klon Pro Micro)",
-    (0x1209, 0x0001): "ChocPilot v0 (STM32F072)",
+    (0x1209, 0x0001): "ChocPilot (STM32F072)",
 }
 PRODUCT_NAME = "ChocPilot"
 

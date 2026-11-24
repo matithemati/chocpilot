@@ -21,27 +21,20 @@ Wspólne zasady:
 
 ### `hello`
 ```json
-{"type":"hello","device":"chocpilot","fw":"1.0.0","board":"promicro","keys":8,"encoder":false,"hid":true,"online":false,"max_line":272}
+{"type":"hello","device":"chocpilot","fw":"1.2.0","board":"chocpilot","keys":8,"encoder":true,"hid":true,"online":false,"leds":12,"icon":32,"savers":["rabbit","corgi"],"max_line":272}
 ```
-- `board`: `"promicro"` (Arduino Pro Micro, ATmega32U4) albo `"chocpilot_v0"` (własna płytka
-  ze STM32F072, LCD 2", pokrętła, suwak, LED).
-- `keys`: liczba klawiszy – 8 (matryca 2×4). `encoder`: `true`, gdy płytka ma pokrętła i suwak
-  (ChocPilot v0) – wysyła wtedy też `encoder`, `encoder_key` i `slider`.
+- `board`: `"chocpilot"` – płytka ChocPilot (STM32F072, LCD 2" IPS, 2 pokrętła, suwak, 12 LED).
+  Firmware sprzed porządków (≤ 1.1.0) wysyłał `"chocpilot_v0"` – aplikacja używa tego pola tylko
+  do wyświetlenia nazwy, możliwości płytki odczytuje z pól poniżej.
+- `keys`: liczba klawiszy – 8 (matryca 2×4). `encoder`: `true` – płytka wysyła też `encoder`,
+  `encoder_key` i `slider`.
 - `hid`: urządzenie ma interfejs HID (tryb awaryjny).
-- `leds`: liczba diod podświetlenia (ChocPilot v0: `12`); brak pola = płytka bez LED. Tylko wtedy
-  aplikacja wysyła komendę `leds`.
-- `icon`: rozmiar ikon klawiszy (ChocPilot v0: `32`); brak pola = tylko etykiety (OLED).
-- `savers`: nazwy animacji wygaszacza wbudowanych w firmware (ChocPilot v0: `["rabbit","corgi"]`);
+- `leds`: liczba diod podświetlenia (`12`); brak pola = bez LED – aplikacja nie wysyła wtedy `leds`.
+- `icon`: rozmiar ikon klawiszy (`32`); brak pola = tylko etykiety.
+- `savers`: nazwy animacji wygaszacza wbudowanych w firmware (`["rabbit","corgi"]`);
   brak pola = tylko wygaszony ekran. Aplikacja buduje z tej listy wybór w ustawieniach, więc nowe
   animacje w firmware nie wymagają zmian aplikacji.
 - `online` (informacyjnie): czy urządzenie uważa aplikację za połączoną.
-- `oled`: adres I²C, pod którym odpowiada ekran (np. `60` = 0x3C), albo `null`, gdy ekran nie
-  odpowiada (tylko Pro Micro – ChocPilot v0 z LCD nie wysyła pól `oled`, `i2c`, `lines`, `swapped`). Firmware przy starcie sam wybiera 0x3C lub 0x3D, jeśli ustawiony adres nie odpowiada.
-- `i2c`: lista adresów wszystkich urządzeń znalezionych na magistrali I²C (maks. 8).
-- `lines`: `{"sda":0|1,"scl":0|1}` – stan linii zmierzony przy starcie bez wewnętrznego
-  podciągania (1 = moduł zasilony i ma pull-upy).
-- `swapped`: `true`, gdy ekran odpowiedział dopiero po zamianie SDA i SCL (firmware obsługuje go
-  wtedy programowym I²C na zamienionych pinach).
 - `max_line`: maksymalna długość linii do urządzenia w bajtach, łącznie z `\n` (ChocPilot: 272).
   Aplikacja dzieli dłuższe `set_fallback` na kilka wiadomości (pierwsza z `replace: true`, kolejne
   z `replace: false`). Tytuły i etykiety są w urządzeniu skracane do 21 / 11 bajtów UTF-8, a ekran
@@ -56,7 +49,7 @@ Wysyłane: po starcie, w odpowiedzi na `hello` od PC i na `get_info`.
 - `key`: 1–8 (K1…K4 – górny rząd, K5…K8 – dolny).
 - `action`: `"down"` | `"up"` (po debounce).
 
-### `encoder`, `encoder_key`, `slider` (tylko ChocPilot v0)
+### `encoder`, `encoder_key`, `slider`
 ```json
 {"type":"encoder","index":1,"delta":-2,"t":123456}
 {"type":"encoder_key","index":1,"action":"down","t":123460}
@@ -100,7 +93,7 @@ Pole `id` jest opcjonalne w każdej wiadomości. Jeśli występuje, urządzenie 
 
 ### `hello`
 ```json
-{"type":"hello","app":"1.0.0"}
+{"type":"hello","app":"1.2.0"}
 ```
 Urządzenie odpowiada `hello` i przechodzi w stan **online**.
 
@@ -157,16 +150,15 @@ w pamięci nieulotnej.
 ```
 | Pole | Typ | Zakres | Domyślnie |
 |---|---|---|---|
-| `brightness` | int | 0–255 (kontrast OLED; v0: podświetlenie LCD – jasność LED ustawia `leds`) | 128 |
+| `brightness` | int | 0–255 – podświetlenie LCD (PWM); jasność diod ustawia `leds` | 128 |
 | `screensaver_s` | int | 0–65535, 0 = wyłączony | 300 |
 | `flip` | bool | obrót ekranu o 180° | false |
 | `debounce_ms` | int | 1–50 | 8 |
-| `oled_addr` | int | adres I²C OLED (0x3C / 0x3D), działa po restarcie | 0x3C |
 | `saver` | string | animacja wygaszacza z listy `savers` w `hello`, `"off"` = wygaszony ekran (nazwa: a–z, 0–9, `_`, do 11 znaków; nieznana = wygaszony ekran) | `"off"` |
 
 Wartość poza zakresem lub złego typu → `error`, żadne pole z tej wiadomości nie jest zapisywane.
 
-### `leds` (tylko płytki z `leds` w `hello`)
+### `leds`
 Podświetlenie LED. Wszystkie pola opcjonalne – zmieniane są tylko podane. Ustawienia są zapisywane
 w pamięci nieulotnej i działają też bez aplikacji (tryb offline).
 
@@ -187,9 +179,8 @@ w pamięci nieulotnej i działają też bez aplikacji (tryb offline).
 - Po przejściu w tryb offline urządzenie wraca do zapisanych ustawień (bez zmian z `save:false`).
 - Aplikacja po połączeniu wysyła pełne ustawienia, a potem kolor aktywnego profilu z `save:false`
   – przełączanie profili nie zużywa pamięci flash.
-- Płytka bez LED (Pro Micro) przyjmuje komendę (ack przy `id`), ale nic nie robi.
 
-### `icon` (tylko płytki z `icon` w `hello`)
+### `icon`
 Ikona klawisza na ekranie LCD zamiast etykiety: 32 × 32 px, 544 B = paleta 16 kolorów RGB565
 big-endian (32 B) + piksele po 4 bity (512 B, starszy półbajt = lewy piksel). Urządzenie rysuje ją
 w skali 2 w kafelku siatki. Wysyłana w kawałkach po kolei (offset 0, 128, 256, 384, 512), dane
@@ -201,9 +192,9 @@ urządzenia wracają etykiety, aż aplikacja wyśle ikony ponownie.
 {"type":"icon","key":3,"clear":true}
 ```
 Kawałek z `offset` 0 zaczyna nową ikonę; zgubiony kawałek (offset ≠ dotychczas zapisanym bajtom)
-jest pomijany, a ikona czeka na ponowne wysłanie od początku. Pro Micro ignoruje tę komendę.
+jest pomijany, a ikona czeka na ponowne wysłanie od początku.
 
-### `time` (tylko płytki z `savers` w `hello`)
+### `time`
 Czas lokalny dla zegara HH:MM na wygaszaczu z animacją. Płytka nie ma zegara z baterią – po
 `time` liczy dalej sama (do restartu). Aplikacja wysyła `time` po połączeniu i co 5 minut
 (zmiana czasu letniego, dryf). Bez `time` wygaszacz pokazuje samą animację.
@@ -211,7 +202,7 @@ Czas lokalny dla zegara HH:MM na wygaszaczu z animacją. Płytka nie ma zegara z
 ```json
 {"type":"time","hour":14,"minute":5,"second":30}
 ```
-`hour` 0–23, `minute` 0–59 (wymagane), `second` 0–59 (opcjonalne). Pro Micro ignoruje tę komendę.
+`hour` 0–23, `minute` 0–59 (wymagane), `second` 0–59 (opcjonalne).
 
 ### `set_fallback`
 Skróty HID dla trybu awaryjnego (offline). Można wysłać pojedyncze przypisanie albo listę:
@@ -249,16 +240,16 @@ K7 = `play_pause`, K8 = `mute`, klawisze 1–4 bez przypisania.
 {"type":"reboot"}
 {"type":"reboot","bootloader":true}
 ```
-`bootloader: true`: Pro Micro – restart do bootloadera Caterina na ok. 8 s (nowy port COM,
-wgrywanie avrdude / `pio run -e promicro -t upload`); ChocPilot v0 – skok do bootloadera DFU
-w ROM STM32 (urządzenie 0483:DF11, `pio run -e chocpilot_v0 -t upload`, wyjście resetem). Urządzenie wysyła `ack` (jeśli było `id`) przed
-restartem.
+`bootloader: true`: skok do bootloadera USB DFU w ROM STM32 (urządzenie „STM32 BOOTLOADER”
+0483:DF11; wgrywanie `firmware/flash.ps1` albo `pio run -t upload`, po wgraniu płytka sama
+uruchamia program). Urządzenie wysyła `ack` (jeśli było `id`) przed restartem.
 
 ### `test_mode`
 ```json
 {"type":"test_mode","enable":true}
 ```
-Włącza/wyłącza tryb testu sprzętu (ekran na żywo pokazuje stan 8 klawiszy).
+Włącza/wyłącza tryb testu sprzętu (ekran na żywo pokazuje stan 8 klawiszy, obroty i przyciski
+pokręteł oraz położenie suwaka; diody LED świecą kolejno R, G, B, biały).
 Tryb można też włączyć, trzymając **K1 + K4 przez 3 s zaraz po starcie**; wyłączyć – komendą
 albo ponownym przytrzymaniem K1 + K4 przez 3 s.
 
@@ -282,8 +273,8 @@ urządzenie zwalnia wszystkie wciśnięte klawisze HID (brak „zawieszonych” 
 ## Przykładowa sesja
 
 ```
-PC  → {"type":"hello","app":"1.0.0"}
-DEV → {"type":"hello","device":"chocpilot","fw":"1.0.0","board":"promicro","keys":8,"encoder":false,"hid":true,"online":true,"max_line":272}
+PC  → {"type":"hello","app":"1.2.0"}
+DEV → {"type":"hello","device":"chocpilot","fw":"1.2.0","board":"chocpilot","keys":8,"encoder":true,"hid":true,"online":true,"leds":12,"icon":32,"savers":["rabbit","corgi"],"max_line":272}
 PC  → {"type":"settings","id":1,"brightness":200}
 DEV → {"type":"ack","id":1}
 PC  → {"type":"display","mode":"grid","title":"Domyslny","labels":["Kalk","Notes","Kopiuj","Wklej","Glos -","Glos +","Play","Wycisz"]}

@@ -1,4 +1,4 @@
-"""Suwak ChocPilot v0: położenie 0–100 % → głośność systemu albo wybranego programu.
+"""Suwak położenie 0–100 % → głośność systemu albo wybranego programu.
 
 Akcja wewnętrzna (bez rejestracji w ACTION_TYPES – nie pojawia się na liście akcji klawiszy):
 kontroler tworzy ją dla każdej zmiany położenia i wykonuje w puli wątków jak inne akcje.

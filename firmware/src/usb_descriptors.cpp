@@ -1,4 +1,4 @@
-// Deskryptory USB ChocPilot v0 (TinyUSB): urządzenie złożone CDC + HID.
+// Deskryptory USB ChocPilot (TinyUSB): urządzenie złożone CDC + HID.
 // Aplikacja szuka portu po nazwie „ChocPilot” (iProduct / iInterface CDC).
 #include <Arduino.h>
 #include <string.h>
@@ -35,7 +35,7 @@ const tusb_desc_device_t kDeviceDesc = {
     .bNumConfigurations = 1,
 };
 
-// Klawiatura (modyfikatory + 6 kodów) i consumer control – układ jak na Pro Micro.
+// Klawiatura (modyfikatory + 6 kodów) i consumer control (raporty jak w standardowej klawiaturze Arduino).
 const uint8_t kHidReportDesc[] = {
     0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x85, chocpilot::usb::kReportKeyboard,  // Keyboard
     0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7, 0x15, 0x00, 0x25, 0x01,

@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from . import savers
 from .actions import Action, ActionBase, make_action
 from .gestures import Gesture
 from .osinfo import config_base_dir, same_process
@@ -65,7 +66,7 @@ ENCODER_GESTURES: tuple[EncoderGesture, ...] = ("cw", "ccw", "press")
 
 
 class EncoderBinding(Model):
-    """Pokrętło (ChocPilot v0): obrót w prawo / w lewo (akcja × liczba zatrzasków) i przycisk."""
+    """Pokrętło: obrót w prawo / w lewo (akcja × liczba zatrzasków) i przycisk."""
 
     label: str = ""
     cw: Action | None = None
@@ -90,7 +91,7 @@ SliderTarget = Literal["off", "system_volume", "app_volume"]
 
 
 class SliderBinding(Model):
-    """Suwak (ChocPilot v0): położenie 0–100 % ustawia głośność systemu albo programu."""
+    """Suwak: położenie 0–100 % ustawia głośność systemu albo programu."""
 
     label: str = ""
     target: SliderTarget = "off"
@@ -176,7 +177,7 @@ LedMode = Literal["off", "status", "static", "breathe", "rainbow"]
 
 
 class LedSettings(Model):
-    """Podświetlenie LED (ChocPilot v0) – zapisywane też w pamięci urządzenia, działa offline."""
+    """Podświetlenie LED – zapisywane też w pamięci urządzenia, działa offline."""
 
     mode: LedMode = "status"  # status = kolor połączenia (online turkus, offline bursztyn)
     color: str = "#00a0c0"
@@ -199,17 +200,11 @@ class DeviceSettings(Model):
     display_mode: Literal["grid", "profile"] = "grid"
     flip: bool = False
     debounce_ms: int = Field(8, ge=1, le=50)
-    # Pokazuj pokrętła i suwak w podglądzie urządzenia – włączane, gdy podłączy się płytka
-    # z pokrętłami (ChocPilot v0, `encoder: true` w hello).
-    controls: bool = False
-    # Rodzaj ekranu w podglądzie: OLED 128×64 albo LCD 320×240 – zapamiętany z ostatniej płytki.
-    screen: Literal["oled", "lcd"] = "oled"
     leds: LedSettings = Field(default_factory=LedSettings)
-    # Animacja wygaszacza LCD ("off" = wygaszony ekran) i animacje znane z ostatniej płytki.
+    # Animacja wygaszacza LCD ("off" = wygaszony ekran) i animacje zgłoszone przez firmware
+    # (domyślnie wbudowane w aplikację – lista widoczna przed pierwszym połączeniem).
     saver: str = "off"
-    savers_available: list[str] = Field(default_factory=list)
-    # Pokazuj ustawienia LED – włączane, gdy podłączy się płytka z diodami (leds w hello).
-    leds_available: bool = False
+    savers_available: list[str] = Field(default_factory=lambda: list(savers.NAMES))
 
 
 class GestureSettings(Model):

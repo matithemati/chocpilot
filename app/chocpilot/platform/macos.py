@@ -1,6 +1,7 @@
-"""Implementacja funkcji systemowych dla macOS (szkic – wymaga sprawdzenia na Macu).
+"""Implementacja funkcji systemowych dla macOS.
 
-Zależności: pynput (klawiatura, mysz) i pyobjc-framework-Cocoa (NSWorkspace).
+Zależności: pynput (klawiatura, mysz), pyobjc-framework-Cocoa (NSWorkspace) i
+pyobjc-framework-ApplicationServices (sprawdzanie uprawnienia Dostępność).
 Klawiatura, mysz i przełączanie okien wymagają uprawnienia „Dostępność”
 (Ustawienia systemowe → Prywatność i ochrona → Dostępność).
 
@@ -105,6 +106,29 @@ class MacPlatform(PynputInput, PlatformBackend):
     def __init__(self) -> None:
         PynputInput.__init__(self)
         self._app_volume_warned = False
+
+    # ------------------------------------------------------------------ uprawnienia
+
+    def missing_permissions(self, prompt: bool = False) -> list[str]:
+        """Dostępność (Accessibility): bez niej skróty, tekst i przełączanie okien nie działają.
+
+        prompt=True – macOS pokazuje okno z przyciskiem do Ustawień systemowych i dopisuje
+        ChocPilot do listy (użytkownik musi tylko włączyć przełącznik).
+        """
+        try:
+            from ApplicationServices import (  # pyobjc-framework-ApplicationServices
+                AXIsProcessTrustedWithOptions,
+                kAXTrustedCheckOptionPrompt,
+            )
+        except ImportError:
+            log.debug("Brak pyobjc ApplicationServices – nie sprawdzam uprawnienia Dostępność")
+            return []
+        try:
+            trusted = bool(AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: prompt}))
+        except Exception:
+            log.exception("Nie udało się sprawdzić uprawnienia Dostępność")
+            return []
+        return [] if trusted else ["accessibility"]
 
     # ------------------------------------------------------------------ programy
 

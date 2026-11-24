@@ -1,4 +1,4 @@
-// 12 × WS2812B-V6 na spodzie płytki (ChocPilot v0) – dane z SPI2 MOSI przez 74AHCT1G125.
+// 12 × WS2812B-V6 na spodzie płytki – dane z SPI2 MOSI przez 74AHCT1G125.
 #pragma once
 
 #include <stdint.h>

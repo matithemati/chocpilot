@@ -1,4 +1,4 @@
-# ChocPilot v0 – mapa pinów
+# ChocPilot – mapa pinów
 
 Źródło prawdy: `tools/design.py` (schemat i płytka są z niego generowane). Współrzędne
 w mm od lewego górnego rogu płytki (widok od góry).
@@ -52,7 +52,7 @@ w mm od lewego górnego rogu płytki (widok od góry).
 Wejścia enkoderów, przycisków i kolumn matrycy: **aktywne niskim, z wewnętrznym
 podciąganiem** (INPUT_PULLUP). Klawisze – matryca 2×4 z diodą przy każdym (niżej).
 
-## Klawisze (Kailh Choc V2, lutowane THT)
+## Klawisze (Kailh Choc V1, lutowane THT)
 
 Matryca 2×4 **COL2ROW**, jak w v1 (`firmware/src/matrix.cpp`): wiersz (wyjście) ustawiany
 na 0, kolumny (wejścia z podciąganiem) czytane; prąd płynie kolumna → przełącznik → dioda →

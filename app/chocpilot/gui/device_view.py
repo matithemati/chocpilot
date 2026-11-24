@@ -1,4 +1,4 @@
-"""Wizualny ChocPilot: ekran OLED nad siatką 2×4, pod nią pokrętła i suwak (ChocPilot v0).
+"""Wizualny ChocPilot: ekran LCD nad siatką 2×4, pod nią pokrętła i suwak.
 Podświetla fizyczne naciśnięcia, obroty i położenie suwaka na żywo."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from ..core.config import EncoderBinding, Profile, SliderBinding
 from ..core.protocol import ENCODER_COUNT, KEY_COLS, KEY_COUNT
 from . import theme
 from .i18n import action_summary, tr
-from .oled import OledView
+from .lcd import LcdView
 from .widgets import frame, label
 
 
@@ -398,24 +398,24 @@ class DeviceView(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.oled = OledView(scale=2)
-        self.oled.setStyleSheet("background: transparent; border: none;")
+        self.lcd = LcdView()
+        self.lcd.setStyleSheet("background: transparent; border: none;")
 
         self.mode_chip = label("", "chip")
-        oled_head = QHBoxLayout()
-        oled_head.setSpacing(8)
-        self.screen_label = label(tr("Ekran OLED"), "lbl")
-        oled_head.addWidget(self.screen_label)
-        oled_head.addWidget(self.mode_chip)
-        oled_head.addStretch(1)
-        oled_frame = frame("oled")
-        of = QHBoxLayout(oled_frame)
+        lcd_head = QHBoxLayout()
+        lcd_head.setSpacing(8)
+        self.screen_label = label(tr('Ekran LCD 2"'), "lbl")
+        lcd_head.addWidget(self.screen_label)
+        lcd_head.addWidget(self.mode_chip)
+        lcd_head.addStretch(1)
+        lcd_frame = frame("lcd")
+        of = QHBoxLayout(lcd_frame)
         of.setContentsMargins(10, 10, 10, 10)
-        of.addWidget(self.oled, 0, Qt.AlignmentFlag.AlignCenter)
+        of.addWidget(self.lcd, 0, Qt.AlignmentFlag.AlignCenter)
         top = QVBoxLayout()
         top.setSpacing(8)
-        top.addLayout(oled_head)
-        top.addWidget(oled_frame, 0, Qt.AlignmentFlag.AlignHCenter)
+        top.addLayout(lcd_head)
+        top.addWidget(lcd_frame, 0, Qt.AlignmentFlag.AlignHCenter)
 
         # Siatka 2 × 4 jak na płytce: K1–K4 u góry, K5–K8 na dole.
         grid = QGridLayout()
@@ -427,7 +427,7 @@ class DeviceView(QWidget):
             self.tiles[k] = tile
             grid.addWidget(tile, (k - 1) // KEY_COLS, (k - 1) % KEY_COLS)
 
-        # Pokrętła i suwak (ChocPilot v0) – widoczne po podłączeniu płytki z pokrętłami.
+        # Pokrętła i suwak – widoczne po podłączeniu płytki z pokrętłami.
         self.encoder_tiles: dict[int, EncoderTile] = {}
         controls_row = QHBoxLayout()
         controls_row.setSpacing(8)
@@ -445,7 +445,6 @@ class DeviceView(QWidget):
         cl.setSpacing(6)
         cl.addWidget(label(tr("Pokrętła i suwak"), "lbl"))
         cl.addLayout(controls_row)
-        self.controls.setVisible(False)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -489,14 +488,6 @@ class DeviceView(QWidget):
         for i, enc in self.encoder_tiles.items():
             enc.set_binding(profile.encoders[i])
         self.slider_tile.set_binding(profile.slider)
-
-    def set_screen_type(self, screen_type: str) -> None:
-        """Podgląd ekranu płytki: "oled" (128×64) albo "lcd" (kolorowy 320×240, ChocPilot v0)."""
-        self.oled.set_screen_type(screen_type)
-        self.screen_label.setText(tr('Ekran LCD 2"') if screen_type == "lcd" else tr("Ekran OLED"))
-
-    def set_controls_visible(self, visible: bool) -> None:
-        self.controls.setVisible(visible)
 
     def select(self, key: int | None) -> None:
         """key 1..8 albo None (zdejmuje też zaznaczenie pokrętła / suwaka)."""

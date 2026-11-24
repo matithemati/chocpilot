@@ -117,6 +117,13 @@ class PlatformBackend(ABC):
     def thread_init(self) -> None:  # noqa: B027 - opcjonalny hak
         """Inicjalizacja wątku roboczego (np. COM na Windows)."""
 
+    def missing_permissions(self, prompt: bool = False) -> list[str]:
+        """Uprawnienia systemu, bez których część akcji nie zadziała (np. Dostępność na macOS).
+
+        prompt=True – system może sam pokazać prośbę o uprawnienie. Pusta lista = wszystko jest.
+        """
+        return []
+
 
 class NullPlatform(PlatformBackend):
     """Implementacja „nic nie rób” – dla nieobsługiwanych systemów i testów."""

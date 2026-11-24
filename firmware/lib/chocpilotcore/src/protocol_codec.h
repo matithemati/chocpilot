@@ -10,7 +10,7 @@
 
 namespace chocpilot {
 
-// Bufor odbioru ATmega32U4. Limit trafia do hello (max_line), aplikacja dzieli dłuższe komendy.
+// Bufor odbioru. Limit trafia do hello (max_line), aplikacja dzieli dłuższe komendy.
 constexpr size_t kMaxLineLength = 272;
 
 enum class CommandType : uint8_t {
@@ -74,7 +74,6 @@ struct SettingsPatch {
     kScreensaver = 1 << 1,
     kFlip = 1 << 2,
     kDebounce = 1 << 3,
-    kOledAddr = 1 << 4,
     kSaver = 1 << 5,
   };
   uint16_t mask = 0;
@@ -120,9 +119,7 @@ struct Command {
   FallbackPatch fallback;
   LedPatch leds;
   TimeOfDay time;
-#if !defined(CHOCPILOT_NO_ICONS)
   IconChunk icon;
-#endif
   bool flag = false;  // reboot.bootloader / test_mode.enable / debug.enable
 };
 
@@ -141,22 +138,11 @@ struct ParseResult {
 ParseResult parseCommand(const char* line, size_t len, Command& out);
 
 // Budowanie wiadomości wychodzących. Zwracają długość (bez \0, bez \n) lub 0 przy braku miejsca.
-// Wynik skanowania magistrali I²C przy starcie (diagnostyka ekranu).
-struct I2cDiag {
-  uint8_t oledAddr = 0;  // adres, pod którym odpowiada OLED (0 = brak odpowiedzi)
-  uint8_t count = 0;
-  uint8_t devices[8] = {0};  // wszystkie znalezione adresy (maks. 8)
-  // Stan linii bez wewnętrznego podciągania (programowe I²C): 1 = wysoki, 0 = niski, −1 = nie mierzono.
-  int8_t sdaLevel = -1;
-  int8_t sclLevel = -1;
-  bool swapped = false;  // ekran znaleziony dopiero po zamianie SDA i SCL
-};
-
-// diag == nullptr → bez pól diagnostycznych. encoder: płytka ma pokrętła (ChocPilot v0).
+// encoder: płytka ma pokrętła.
 // leds: liczba diod podświetlenia (0 = brak, pole leds pominięte). savers: nazwy animacji
 // wygaszacza (pole savers tylko, gdy saverCount > 0).
 size_t buildHello(char* buf, size_t cap, const char* board, const char* fw, bool online,
-                  const I2cDiag* diag = nullptr, bool encoder = false, uint8_t leds = 0,
+                  bool encoder = false, uint8_t leds = 0,
                   const char* const* savers = nullptr, uint8_t saverCount = 0,
                   uint8_t iconSize = 0);
 

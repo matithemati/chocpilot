@@ -1,4 +1,4 @@
-"""Pokrętła i suwak ChocPilot v0: protokół, model profilu, akcje w kontrolerze."""
+"""Pokrętła i suwak ChocPilot: protokół, model profilu, akcje w kontrolerze."""
 
 from __future__ import annotations
 
@@ -47,11 +47,11 @@ def test_parse_encoder_errors(message: dict[str, Any]) -> None:
 
 def test_hello_reports_encoder_board() -> None:
     info = protocol.parse_device_message(
-        {"type": "hello", "device": "chocpilot", "board": "chocpilot_v0", "encoder": True}
+        {"type": "hello", "device": "chocpilot", "board": "chocpilot", "encoder": True}
     )
     assert isinstance(info, DeviceInfo)
     assert info.encoder is True
-    assert info.board_name == "ChocPilot v0 (STM32F072)"
+    assert info.board_name == "ChocPilot (STM32F072)"
 
 
 # --------------------------------------------------------------------------- profil
@@ -122,7 +122,7 @@ def make_controller(
     transport.connect()
     controller.handle_state(
         ConnectionState.CONNECTED,
-        DeviceInfo("chocpilot", "1.1.0", "chocpilot_v0", encoder=True),
+        DeviceInfo("chocpilot", "1.1.0", "chocpilot", encoder=True),
         "COM9",
     )
     return controller, transport

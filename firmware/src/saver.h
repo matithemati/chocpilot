@@ -1,4 +1,4 @@
-// Animowany wygaszacz LCD (ChocPilot v0): postać z pixel-artu (paleta ≤ 16 kolorów, 4 bity na
+// Animowany wygaszacz LCD: postać z pixel-artu (paleta ≤ 16 kolorów, 4 bity na
 // piksel) idzie po ekranie nad pasem ziemi. Dane animacji: saver_data.h (generowane z aplikacji,
 // app/chocpilot/core/savers.py – ta sama oś czasu co podgląd w aplikacji).
 #pragma once

@@ -1,5 +1,5 @@
 // Warstwa sprzętowa (HAL): USB (CDC + HID), pamięć nieulotna, restart.
-// Implementacje: hal_promicro.cpp (ATmega32U4), hal_stm32.cpp (ChocPilot v0, STM32F072).
+// Implementacja: hal_stm32.cpp (STM32F072); testy native nie używają HAL.
 #pragma once
 
 #include <stddef.h>
@@ -11,9 +11,9 @@ namespace hal {
 // --- board ---
 // Wczesna inicjalizacja USB (nazwa produktu, HID) – przed serialBegin().
 void usbBegin();
-// Obsługa stosu USB – wołane w każdym obiegu pętli (na AVR robi to rdzeń Arduino).
+// Obsługa stosu USB (TinyUSB) – wołane w każdym obiegu pętli.
 void poll();
-// Restart; bootloader=true → bootloader (Pro Micro: Caterina, STM32: DFU w ROM).
+// Restart; bootloader=true → bootloader USB DFU w ROM układu.
 [[noreturn]] void reboot(bool bootloader);
 
 // --- usb_cdc (łącze z aplikacją) ---

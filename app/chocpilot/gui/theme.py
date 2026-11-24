@@ -119,7 +119,7 @@ QFrame#inspector {{ background: transparent; border: none; border-left: 1px soli
 QFrame#soft {{ background: {soft}; border: 1px solid {border2}; border-radius: 12px; }}
 QFrame#outlined {{ background: transparent; border: 1px solid {border2}; border-radius: 12px; }}
 QFrame#hline {{ background: {border}; border: none; max-height: 1px; min-height: 1px; }}
-QFrame#oled {{ background: #06090D; border-radius: 12px; border: none; }}
+QFrame#lcd {{ background: #06090D; border-radius: 12px; border: none; }}
 QFrame#bannerWarn {{ background: {warn_soft}; border: 1px solid {warn_border}; border-radius: 10px; }}
 QFrame#bannerWarn QLabel {{ color: {warn_text}; }}
 QFrame#bannerInfo {{ background: {info_soft}; border: 1px solid {info_border}; border-radius: 10px; }}
@@ -141,7 +141,7 @@ QLabel#crumb {{ color: {sub}; font-size: 9pt; }}
 QLabel#crumbCur {{ color: {text}; background: {soft}; border-radius: 6px; padding: 2px 8px; font-size: 9pt; font-weight: 500; }}
 QLabel#chipOk {{ background: {ok_soft}; color: {ok_text}; border-radius: 11px; padding: 2px 10px; font-size: 8.5pt; font-weight: 600; }}
 QLabel#chip {{ background: {soft}; color: {sub}; border-radius: 11px; padding: 2px 10px; font-size: 8.5pt; font-weight: 600; }}
-QLabel#oledPreview {{ background: #06090D; color: #7CC4FF; border-radius: 4px; padding: 1px 8px; font-family: {mono_fonts}; }}
+QLabel#lcdPreview {{ background: #06090D; color: #7CC4FF; border-radius: 4px; padding: 1px 8px; font-family: {mono_fonts}; }}
 QLabel#badge {{ border-radius: 11px; font-weight: 700; font-size: 10pt; }}
 
 QPushButton, QToolButton {{

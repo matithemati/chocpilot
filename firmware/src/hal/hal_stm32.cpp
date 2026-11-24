@@ -1,4 +1,4 @@
-// HAL: ChocPilot v0 (STM32F072CBT6, rdzeń STM32duino). USB CDC + HID przez TinyUSB,
+// HAL: ChocPilot (STM32F072CBT6, rdzeń STM32duino). USB CDC + HID przez TinyUSB,
 // konfiguracja w emulacji EEPROM rdzenia (ostatnia strona flash), bootloader DFU w ROM.
 
 #include <Arduino.h>
@@ -14,7 +14,7 @@ namespace hal {
 
 namespace {
 
-// Emulacja EEPROM: nagłówek [znacznik 2 B][długość 2 B][CRC-8 1 B] + dane (jak na Pro Micro).
+// Emulacja EEPROM: nagłówek [znacznik 2 B][długość 2 B][CRC-8 1 B] + dane.
 constexpr uint16_t kMagic = 0x5433;  // „T3”
 constexpr uint32_t kHeaderSize = 5;
 constexpr uint32_t kEepromSize = E2END + 1;
@@ -42,7 +42,7 @@ inline volatile uint32_t& bootFlag() {
   return *reinterpret_cast<volatile uint32_t*>(reinterpret_cast<uintptr_t>(&_estack) - 1024);
 }
 
-// CRC-8 Dallas/Maxim (wielomian 0x31 odbity = 0x8C) – ten sam co _crc_ibutton_update na AVR.
+// CRC-8 Dallas/Maxim (wielomian 0x31 odbity = 0x8C).
 uint8_t crcOf(const uint8_t* data, size_t len) {
   uint8_t crc = 0;
   for (size_t i = 0; i < len; ++i) {

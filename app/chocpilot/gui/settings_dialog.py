@@ -6,6 +6,7 @@ Klasa działa jako okno dialogowe albo – osadzona – jako strona okna główn
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import cast
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -177,13 +178,14 @@ class SettingsDialog(QDialog):
                 _row(tr("Debounce klawiszy"), "1–50 ms", self.debounce),
             ]
         )
-        device_page.layout().insertWidget(device_page.layout().count() - 1, hline())
-        device_page.layout().insertWidget(
-            device_page.layout().count() - 1, _row(tr("Akcje urządzenia"), "", None)
+        device_layout = cast(QVBoxLayout, device_page.layout())
+        device_layout.insertWidget(device_layout.count() - 1, hline())
+        device_layout.insertWidget(
+            device_layout.count() - 1, _row(tr("Akcje urządzenia"), "", None)
         )
-        device_page.layout().insertWidget(device_page.layout().count() - 1, actions)
+        device_layout.insertWidget(device_layout.count() - 1, actions)
 
-        # --- podświetlenie LED (płytki z diodami, np. ChocPilot v0)
+        # --- podświetlenie LED
         self._leds_preview = on_leds_preview
         self.leds_previewed = False
         led = d.leds
@@ -269,7 +271,8 @@ class SettingsDialog(QDialog):
                 self._wrap(self.hold_threshold),
             ]
         )
-        gestures_page.layout().insertWidget(gestures_page.layout().count() - 1, note)
+        gestures_layout = cast(QVBoxLayout, gestures_page.layout())
+        gestures_layout.insertWidget(gestures_layout.count() - 1, note)
 
         # --- tryb awaryjny
         fb = settings.fallback
@@ -383,8 +386,6 @@ class SettingsDialog(QDialog):
             self.tab_buttons[key].clicked.connect(
                 lambda _=False, w=scroll: self.pages.setCurrentWidget(w)
             )
-        # Zakładka LED tylko dla płytek z diodami (ustawiane po pierwszym podłączeniu).
-        self.tab_buttons["leds"].setVisible(d.leds_available)
         self.show_tab("device")
 
         # --- układ: nagłówek, karta z nawigacją i treścią
@@ -472,7 +473,8 @@ class SettingsDialog(QDialog):
     def embed(self) -> None:
         """Tryb strony okna głównego (bez ramki i tytułu okna)."""
         self.setWindowFlags(Qt.WindowType.Widget)
-        self.layout().setContentsMargins(0, 0, 0, 0)
+        if (layout := self.layout()) is not None:
+            layout.setContentsMargins(0, 0, 0, 0)
 
     def _fallback_entries(self) -> list[FallbackEntry] | None:
         entries = []

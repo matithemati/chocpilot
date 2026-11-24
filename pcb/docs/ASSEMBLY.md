@@ -1,4 +1,4 @@
-# ChocPilot v0 – montaż i uruchomienie
+# ChocPilot – montaż i uruchomienie
 
 Wszystko lutowane ręcznie. Przyda się: grot ścięty 1–2 mm, topnik w żelu (no-clean), cyna
 0,5 mm, plecionka, pęseta, lupa / mikroskop, multimetr. Gorące powietrze nie jest konieczne.
@@ -81,7 +81,7 @@ jest możliwe, ale kłopotliwe (2 piny, odsysacz), więc sprawdź przełączniki
 - Piny THT od spodu przytnij jak najkrócej (obudowa / blat).
 
 ### 10. Złożenie
-Ekran LCD przykręcony w obudowie, kabel PH2.0 z modułu na J2 (VCC na pin 1), przełączniki Choc V2 przylutowane (płyta montażowa
+Ekran LCD przykręcony w obudowie, kabel PH2.0 z modułu na J2 (VCC na pin 1), przełączniki Choc V1 przylutowane (płyta montażowa
 w obudowie trzyma je w osi), keycapy MX, gałki enkoderów, nakładka suwaka.
 
 ## Najczęstsze problemy

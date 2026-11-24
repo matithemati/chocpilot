@@ -65,13 +65,13 @@ def test_main_window_edit_key(window, qtbot) -> None:
     qtbot.waitUntil(lambda: ("media", "play_pause") in platform.calls, timeout=2000)
 
 
-def test_controls_v0_board(qtbot, sync_executor) -> None:
+def test_controls_editing(qtbot, sync_executor) -> None:
     from chocpilot.gui.bridge import QtBridge
     from chocpilot.gui.main_window import MainWindow
 
     config = Config()
     config.ensure_valid()
-    device = SimulatedDevice(board="chocpilot_v0")
+    device = SimulatedDevice()
     controller = Controller(
         config, SimulatorTransport(device), FakePlatform(), executor=sync_executor
     )
@@ -80,13 +80,9 @@ def test_controls_v0_board(qtbot, sync_executor) -> None:
     controller.add_listener(bridge)
     win = MainWindow(controller, bridge, device.screen, lambda: None, [])
     qtbot.addWidget(win)
-    assert win.device_view.controls.isHidden()
+    assert not win.device_view.controls.isHidden()  # pokrętła i suwak zawsze w podglądzie
     controller.start()
     try:
-        # płytka z pokrętłami → wiersz pokręteł i suwaka staje się widoczny (i zapamiętany)
-        qtbot.waitUntil(lambda: not win.device_view.controls.isHidden(), timeout=3000)
-        assert config.settings.device.controls is True
-
         # edycja pokrętła 2
         win.device_view.encoder_tiles[2].clicked.emit("e2")
         assert win.stack.currentWidget() is win.encoder_editor
@@ -162,24 +158,6 @@ def test_settings_dialog_roundtrip(window, qtbot) -> None:
     assert dialog.device_changed
 
 
-def test_oled_render_all_modes(qtbot) -> None:
-    from chocpilot.core.simulator import Screen
-    from chocpilot.gui.oled import render
-
-    for screen in (
-        Screen(kind="grid", title="Domyslny", labels=("Kalk", "Play Pause") * 4, online=True),
-        Screen(kind="profile", title="Stream"),
-        Screen(kind="bar", title="Vol", value=50),
-        Screen(kind="text", line1="A", line2="B"),
-        Screen(kind="flash", line1="Spotify", key=3),
-        Screen(kind="test", test_keys=(True, False) * 4),
-        Screen(kind="offline"),
-        Screen(kind="off"),
-    ):
-        image = render(screen)
-        assert image.width() == 128 and image.height() == 64
-
-
 def test_language_switch_rebuilds_ui(window, qtbot) -> None:
     from chocpilot.gui import i18n
 
@@ -246,13 +224,13 @@ def test_lcd_render_all_modes(qtbot) -> None:
     assert test.pixelColor(90, 40) == lcd.PANEL
 
 
-def test_preview_switches_to_lcd_for_v0(qtbot, sync_executor) -> None:
+def test_preview_is_lcd(qtbot, sync_executor) -> None:
     from chocpilot.gui.bridge import QtBridge
     from chocpilot.gui.main_window import MainWindow
 
     config = Config()
     config.ensure_valid()
-    device = SimulatedDevice(board="chocpilot_v0")
+    device = SimulatedDevice()
     controller = Controller(
         config, SimulatorTransport(device), FakePlatform(), executor=sync_executor
     )
@@ -260,20 +238,17 @@ def test_preview_switches_to_lcd_for_v0(qtbot, sync_executor) -> None:
     controller.add_listener(bridge)
     win = MainWindow(controller, bridge, device.screen, lambda: None, [])
     qtbot.addWidget(win)
-    assert win.device_view.oled.screen_type == "oled"
+    assert win.device_view.lcd.width() == 320 + 8
     controller.start()
     try:
-        qtbot.waitUntil(lambda: win.device_view.oled.screen_type == "lcd", timeout=3000)
-        assert config.settings.device.screen == "lcd"
-        assert win.device_view.oled.width() == 320 + 8
-        assert "LCD" in win.status_fw.text()
+        qtbot.waitUntil(lambda: win.status_fw.text().startswith("Firmware: 1"), timeout=3000)
     finally:
         controller.stop()
 
 
 def test_simulator_test_mode_tracks_controls() -> None:
     now = [0.0]
-    device = SimulatedDevice(board="chocpilot_v0", clock=lambda: now[0])
+    device = SimulatedDevice(clock=lambda: now[0])
     now[0] = 10.0  # po ekranie startowym
     device.handle_line(b'{"type":"test_mode","enable":true}\n')
     device.turn(1, 2)
@@ -294,11 +269,6 @@ def test_led_settings_tab_preview_and_save(window, qtbot) -> None:
     win, controller, device, platform = window
     previews: list[LedSettings] = []
     settings = controller.config.settings
-    assert settings.device.leds_available is False
-    dialog = SettingsDialog(settings, lambda: [], lambda k: None, on_leds_preview=previews.append)
-    assert dialog.tab_buttons["leds"].isHidden()  # Pro Micro: bez zakładki LED
-
-    settings.device.leds_available = True
     dialog = SettingsDialog(settings, lambda: [], lambda k: None, on_leds_preview=previews.append)
     assert not dialog.tab_buttons["leds"].isHidden()
     assert not dialog.led_color.isEnabled()  # tryb status – kolor nieużywany
@@ -315,13 +285,13 @@ def test_led_settings_tab_preview_and_save(window, qtbot) -> None:
     assert dialog.device_changed
 
 
-def test_v0_board_enables_led_controls(qtbot, sync_executor) -> None:
+def test_led_controls_reach_device(qtbot, sync_executor) -> None:
     from chocpilot.gui.bridge import QtBridge
     from chocpilot.gui.main_window import MainWindow
 
     config = Config()
     config.ensure_valid()
-    device = SimulatedDevice(board="chocpilot_v0")
+    device = SimulatedDevice()
     controller = Controller(
         config, SimulatorTransport(device), FakePlatform(), executor=sync_executor
     )
@@ -329,11 +299,9 @@ def test_v0_board_enables_led_controls(qtbot, sync_executor) -> None:
     controller.add_listener(bridge)
     win = MainWindow(controller, bridge, device.screen, lambda: None, [])
     qtbot.addWidget(win)
-    assert win.profile_editor.led_group.isHidden()
+    assert not win.profile_editor.led_group.isHidden()
     controller.start()
     try:
-        qtbot.waitUntil(lambda: config.settings.device.leds_available, timeout=3000)
-        assert not win.profile_editor.led_group.isHidden()
         # ustawienia LED po połączeniu trafiają do urządzenia
         qtbot.waitUntil(lambda: device.leds_saved.mode == "status", timeout=2000)
 

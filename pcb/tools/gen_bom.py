@@ -28,20 +28,22 @@ PKG_KIND = {'Device:R': 'SMD', 'Device:C': 'SMD'}
 
 EXTRA = [
     # (oznaczenia, ilość, opis, obudowa, producent, nr, tme, amazon, montaż, uwagi)
-    ('S1–S8', 8, 'Przełącznik Kailh Choc V2 (low profile, trzpień MX)', 'THT', 'Kailh',
-     'CPG1353 (Choc V2)', 'brak w TME', 'amazon.de B0CMZWF635 (Kailh Choc V2 Brown) lub inny Choc V2',
-     'THT (lutowany od spodu)', 'brak w TME; pasują też Choc V1 (CPG1350)'),
-    ('—', 8, 'Keycap 1u w profilu MX (Choc V2 ma trzpień MX)', '—', '—', '—', 'brak w TME',
-     'keycaps MX 1u (np. low profile)', '—', 'raster 19,05 mm'),
-    ('ENC1, ENC2', 2, 'Gałka do enkodera, oś 6 mm D, Ø ≤ 18 mm', '—', '—', '—', '—',
-     'potentiometer knob 6 mm D shaft', '—', 'oś D 6 mm'),
-    ('RV1', 1, 'Nakładka na dźwignię suwaka ALPS RS (dźwignia 4 × 1,2 mm)', '—', '—', '—', '—',
-     'slide potentiometer knob cap 4 x 1.2 mm', '—', 'wąska (≤ 8 mm) – patrz DESIGN_NOTES'),
+    ('S1–S8', 8, 'Przełącznik Kailh Choc V1 (low profile, trzpień z dwiema nogami)', 'THT', 'Kailh',
+     'CPG1350 (Choc V1)', 'brak w TME', 'Kailh Choc V1 (np. Red / Brown)',
+     'THT (lutowany od spodu)', 'brak w TME; footprint przyjmuje też Choc V2 (wtedy keycapy MX)'),
+    ('—', 8, 'Keycap Choc V1 1u – drukowany (case/chocpilot_keycap.stl)', '—', '—', '—', '—',
+     '—', 'druk 3D', 'równo z górą obudowy; opis w case/README.md'),
+    ('ENC1, ENC2', 2, 'Gałka enkodera Ø18 – drukowana (case/chocpilot_knob.stl)', '—', '—', '—', '—',
+     '—', 'druk 3D', 'oś D 6 mm'),
+    ('RV1', 1, 'Nakładka suwaka – drukowana (case/chocpilot_slider_cap.stl)', '—', '—', '—', '—',
+     '—', 'druk 3D', 'dźwignia 4 × 1,2 mm'),
     ('J2', 1, 'Ekran LCD 2" IPS 240×320, ST7789V, SPI (Waveshare 2inch LCD Module, z kablem PH2.0)',
      '58 × 35 mm', 'Waveshare', '17344', 'WSH-17344', '', 'w obudowie, kabel PH2.0 → J2',
      'kabel 1:1 na J2 (VCC na pin 1); zasilanie 3,3 V – logika modułu = VCC'),
-    ('H1–H4', 4, 'Śruba M3 × 6 + tuleja dystansowa / wkładka do obudowy', '—', '—', '—', '—',
-     'M3 screws assortment', '—', 'zależnie od obudowy'),
+    ('H1–H4', 4, 'Wkręt M3 × 14 z łbem stożkowym (ISO 10642) – płytka i obudowa', '—', '—', '—', '—',
+     'M3 countersunk screws', '—', 'od spodu przez dno w kołki obudowy'),
+    ('—', 4, 'Wkręt M2 × 5 – mocowanie ekranu w obudowie', '—', '—', '—', '—',
+     'M2 screws assortment', '—', 'w tuleje obudowy (otwór Ø1,6)'),
 ]
 
 
@@ -132,13 +134,13 @@ def main():
         w.writerow(['Poz.'] + HEAD)
         for i, r in enumerate(data, 1):
             w.writerow([i] + r)
-    md = ['# ChocPilot v0 – BOM', '',
+    md = ['# ChocPilot – BOM', '',
           'Wygenerowano z `tools/design.py` (`python3 tools/gen_bom.py`). Ten sam plik jako CSV: '
           '[chocpilot-v0-bom.csv](chocpilot-v0-bom.csv).', '',
           'Wszystkie elementy lutowane na płytce poza przełącznikami Kailh są w TME – numery sprawdzone '
           'w katalogu tme.eu 04.11.2026: na stanie TME w potrzebnej ilości i bez oznaczenia „Hardly '
           'available product” / „till the stock lasts”. Ekran (Waveshare WSH-17344) też jest w TME. TME nie sprzedaje produktów Kailh – '
-          'przełączniki Choc V2 trzeba kupić gdzie indziej (Amazon), podobnie keycapy, gałki i nakładkę suwaka. Listwy kołkowe J2 (ekran) i J3 '
+          'przełączniki Choc V1 trzeba kupić gdzie indziej; keycapy, gałki i nakładka suwaka są drukowane (case/). Listwy kołkowe J2 (ekran) i J3 '
           '(SWD) nie są ujęte – z własnego zapasu.', '',
           '| Poz. | ' + ' | '.join(h for h in HEAD if h != 'Footprint KiCad') + ' |',
           '|' + '---|' * (len(HEAD)) ]

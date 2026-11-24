@@ -1,4 +1,4 @@
-// Ikony klawiszy (ChocPilot v0): 8 obrazów 32 × 32 (paleta 16 kolorów + 4 bity na piksel) w RAM,
+// Ikony klawiszy: 8 obrazów 32 × 32 (paleta 16 kolorów + 4 bity na piksel) w RAM,
 // wysyłane przez aplikację komendą icon w kawałkach. Rysowane w siatce LCD zamiast etykiet.
 #pragma once
 

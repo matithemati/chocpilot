@@ -1,4 +1,4 @@
-// Identyfikatory raportów HID ChocPilot v0 (wspólne dla deskryptora i HAL).
+// Identyfikatory raportów HID ChocPilot (wspólne dla deskryptora i HAL).
 #pragma once
 
 #include <stdint.h>

@@ -9,7 +9,7 @@ namespace chocpilot {
 
 namespace {
 
-// Tabele w pamięci programu (na AVR nie zajmują RAM): nazwy jako jeden napis „nazwa\0nazwa\0…”
+// Tabele stałe we flash: nazwy jako jeden napis „nazwa\0nazwa\0…”
 // zakończony pustą nazwą, wartości w osobnej tablicy o tej samej kolejności.
 const char kKeyNames[] CHOCPILOT_PROGMEM =
     "enter\0return\0esc\0escape\0backspace\0tab\0space\0minus\0"

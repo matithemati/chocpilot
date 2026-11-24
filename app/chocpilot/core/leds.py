@@ -13,7 +13,7 @@ from .protocol import KEY_COUNT
 LED_COUNT = 12
 MAX_LEVEL = 80  # jasność 255 = 80/255 pełnej mocy diody (prąd USB)
 REACT_MS = 400
-# Dioda przy klawiszu K1…K8 (indeksy łańcucha L1…L12 od 0) – firmware/src/boards/board_v0.h.
+# Dioda przy klawiszu K1…K8 (indeksy łańcucha L1…L12 od 0) – firmware/src/boards/board.h.
 KEY_LED = (8, 9, 10, 11, 5, 4, 3, 2)
 
 Rgb = tuple[int, int, int]

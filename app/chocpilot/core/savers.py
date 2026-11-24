@@ -1,4 +1,4 @@
-"""Animowane wygaszacze ekranu LCD (ChocPilot v0) – jedno źródło danych dla firmware i aplikacji.
+"""Animowane wygaszacze ekranu LCD – jedno źródło danych dla firmware i aplikacji.
 
 Każda animacja to pixel-art (ramki jako tekst, znak = kolor z palety, „.” = przezroczysty)
 przesuwany po ekranie krokami. firmware/tools/gen_savers.py zamienia te dane na

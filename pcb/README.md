@@ -1,8 +1,9 @@
-# ChocPilot v0 – płytka (KiCad 10)
+# ChocPilot – płytka (KiCad 10)
 
-Sprzęt ChocPilot v0: 8 klawiszy Kailh Choc V2 lutowanych w płytkę (2 rzędy po 4, matryca
+Sprzęt ChocPilot (rewizja płytki **v0** – nazwa plików KiCad): 8 klawiszy Kailh Choc V1 lutowanych w płytkę (2 rzędy po 4, matryca
 z diodą przy każdym klawiszu),
-kolorowy ekran LCD 2" IPS 240×320 (Waveshare, SPI, w obudowie) pomiędzy nimi, 2 enkodery EC11 po lewej, suwak 45 mm po prawej,
+kolorowy ekran [Waveshare 2" IPS LCD 240×320](https://www.tme.eu/pl/details/wsh-17344/wyswietlacze-lcd-graficzne/waveshare/17344/)
+(TME WSH-17344, ST7789V, SPI; przykręcony do obudowy) pomiędzy nimi, 2 enkodery EC11 po lewej, suwak 45 mm po prawej,
 12 diod WS2812B na spodzie (podświetlenie blatu) i własny mikrokontroler STM32F072 z USB-C.
 Płytka 114 × 93 mm, 2 warstwy, wszystko poza elementami istniejącymi tylko w THT – SMD
 w obudowach do ręcznego lutowania (0805, SOT-23, LQFP-48).
@@ -16,9 +17,10 @@ w obudowach do ręcznego lutowania (0805, SOT-23, LQFP-48).
 | [bom/BOM.md](bom/BOM.md), [bom/chocpilot-v0-bom.csv](bom/chocpilot-v0-bom.csv) | lista części z numerami TME / Amazon |
 | [docs/PINOUT.md](docs/PINOUT.md) | mapa pinów MCU, złącza, kolejność LED |
 | [docs/ASSEMBLY.md](docs/ASSEMBLY.md) | kolejność lutowania i uruchomienie |
-| [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) | decyzje projektowe, zasilanie, co trzeba zmienić w firmware/aplikacji/obudowie |
+| [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) | decyzje projektowe, zasilanie, sygnały, rzeczy do sprawdzenia przed zamówieniem |
 | `img/` | podgląd: `schematic.pdf/.png`, `pcb_top/bottom.png` (warstwy), `render_top/bottom.png` (3D) |
-| `fab/chocpilot-v0-gerbers.zip` | Gerbery + wiercenia do zamówienia płytek |
+| `fab/gerbers/` | Gerbery + wiercenia (Excellon) do zamówienia płytek – spakuj zawartość do ZIP albo `tools/export_fab.sh` |
+| `production/` | pliki montażu SMT (BOM, pozycje elementów, netlista IPC) z wtyczki Fabrication Toolkit |
 | `tools/` | generatory – patrz niżej |
 
 ## Dlaczego STM32F072CBT6, a nie RP2040
@@ -31,9 +33,9 @@ w obudowach do ręcznego lutowania (0805, SOT-23, LQFP-48).
   USB), pamięć programu w środku (128 KB) i **bootloader USB DFU w ROM** (BOOT0 + RESET).
   RP2040 wymaga zewnętrznego flasha QSPI (SOIC-8 lub USON), kwarcu 12 MHz i dodatkowego
   odsprzęgania wewnętrznego regulatora 1,1 V.
-- **Wystarczająca wydajność.** Firmware v1 mieści się w ATmega32U4 (32 KB flash / 2,5 KB RAM);
-  F072 ma 128 KB / 16 KB, sprzętowe SPI, ADC 12-bit, timery z trybem enkodera (TIM2, TIM3)
-  i SPI do sterowania WS2812.
+- **Wystarczająca wydajność.** F072 ma 128 KB flash / 16 KB RAM (firmware zajmuje ok. 43 % /
+  69 %), sprzętowe SPI, ADC 12-bit, timery z trybem enkodera (TIM2, TIM3) i SPI do sterowania
+  WS2812.
 - **Dostępność.** STM32F072CBT6 jest w TME, wspierany przez STM32duino (PlatformIO `ststm32`)
   i QMK.
 
@@ -59,7 +61,7 @@ Schemat, płytka i BOM powstają ze skryptów w `tools/` (dane: [`tools/design.p
 Ręczne poprawki w KiCad są możliwe, ale kolejne generowanie je nadpisze – zmieniaj `design.py`.
 
 ```bash
-cd pcb/chocpilot-v0
+cd pcb
 python3 tools/gen_pro.py        # reguły DRC i klasy sieci
 python3 tools/gen_sch.py        # schemat
 /Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3 tools/gen_pcb.py

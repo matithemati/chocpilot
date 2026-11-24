@@ -14,7 +14,7 @@ constexpr int kTotalKeys = kRows * kCols;
 // Limity napisów (w znakach Unicode) i rozmiary buforów (w bajtach UTF-8, z \0).
 constexpr size_t kTitleChars = 21;
 constexpr size_t kLabelChars = 10;  // na ekranie 1–2 wiersze po 6 znaków w komórce 32 px
-// Mało RAM (ATmega32U4): bufory na tekst ASCII – dłuższy UTF-8 jest obcinany wcześniej.
+// Bufory na tekst ASCII (krój ekranu 5×7) – dłuższy UTF-8 jest obcinany wcześniej.
 constexpr size_t kTitleBuf = 22;
 constexpr size_t kLabelBuf = 12;
 
@@ -23,7 +23,7 @@ struct Settings {
   uint16_t screensaverS = 300;
   bool flip = false;
   uint8_t debounceMs = 8;
-  uint8_t oledAddr = 0x3C;
+  uint8_t reserved = 0x3C;  // nieużywane – zostawione, by zapisane ustawienia miały ten sam układ
 };
 
 // Skrót trybu awaryjnego: kombinacja klawiatury (mods + code) albo klawisz multimedialny.
@@ -39,7 +39,7 @@ constexpr int kFallbackSlots = kTotalKeys;
 
 enum class DisplayMode : uint8_t { None = 0, Profile, Grid, Text, Bar };
 
-// Podświetlenie LED (ChocPilot v0: 12 × WS2812B na spodzie). Status = kolor połączenia
+// Podświetlenie LED (ChocPilot: 12 × WS2812B na spodzie). Status = kolor połączenia
 // (online turkus, offline bursztyn); pozostałe tryby używają koloru r/g/b.
 enum class LedMode : uint8_t { Off = 0, Status, Static, Breathe, Rainbow };
 constexpr uint8_t kLedSpeedMin = 1;
@@ -55,7 +55,7 @@ struct LedSettings {
   bool react = true;         // błysk diody przy naciśniętym klawiszu
 };
 
-// Animacja wygaszacza ekranu (ChocPilot v0): nazwa wbudowanej animacji, np. "rabbit"; pusta =
+// Animacja wygaszacza ekranu: nazwa wbudowanej animacji, np. "rabbit"; pusta =
 // wygaszony ekran. Nazwa zamiast numeru – kolejność i liczba animacji mogą się zmieniać.
 constexpr size_t kSaverNameBuf = 12;  // do 11 znaków [a-z0-9_]
 
@@ -63,7 +63,7 @@ struct SaverSettings {
   char name[kSaverNameBuf] = {0};
 };
 
-// Ikony klawiszy na LCD (ChocPilot v0): 32 × 32 px, paleta 16 kolorów RGB565 (32 B) + piksele
+// Ikony klawiszy na LCD: 32 × 32 px, paleta 16 kolorów RGB565 (32 B) + piksele
 // 4 bity (512 B) – rysowane w skali 2 w kafelkach siatki zamiast etykiet. Tylko w RAM: aplikacja
 // wysyła je po połączeniu (komenda icon w kawałkach), po restarcie bez aplikacji – etykiety.
 constexpr uint8_t kIconSize = 32;

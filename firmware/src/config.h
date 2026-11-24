@@ -10,11 +10,6 @@
 #define CHOCPILOT_FW_VERSION "1.0.0"
 #endif
 
-// Domyślny adres I²C wyświetlacza (nadpisywany ustawieniem oled_addr).
-#ifndef CHOCPILOT_OLED_ADDR
-#define CHOCPILOT_OLED_ADDR 0x3C
-#endif
-
 namespace chocpilot {
 
 constexpr uint32_t kScanIntervalUs = 1000;      // skan matrycy co 1 ms

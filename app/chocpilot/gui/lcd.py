@@ -1,20 +1,40 @@
 """Podgląd kolorowego ekranu LCD 2" (Waveshare, ST7789V 240×320, w poziomie 320×240).
 
-Te same układy, kolory i krój 5×7 co firmware/src/display_tft.cpp (ChocPilot v0), więc podgląd
+Te same układy, kolory i krój 5×7 co firmware/src/display_tft.cpp, więc podgląd
 w aplikacji wygląda jak ekran urządzenia.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect
-from PySide6.QtGui import QColor, QImage, QPainter, QTransform
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QTransform
+from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from ..core import savers
 from ..core.protocol import ENCODER_COUNT, KEY_COLS, KEY_ROWS
 from ..core.simulator import Screen
-from .oled import _FONT_5X7, _ascii
 
 WIDTH, HEIGHT = 320, 240
+
+# Krój 5×7 z firmware (znaki ASCII 32–126, 5 kolumn na znak, bit 0 = górny wiersz).
+_FONT_5X7 = bytes.fromhex(
+    "000000000000005f00000007000700147f147f14242a7f2a12231308646236495522500005030000001c224100"
+    "0041221c00082a1c2a0808083e080800503000000808080808006060000020100804023e5149453e00427f4000"
+    "42615149462141454b311814127f1027454545393c4a49493001710905033649494936064949291e0036360000"
+    "00563600000814224100141414141400412214080201510906324979413e7e1111117e7f494949363e41414122"
+    "7f4141221c7f494949417f090909013e4149497a7f0808087f00417f41002040413f017f081422417f40404040"
+    "7f020c027f7f0408107f3e4141413e7f090909063e4151215e7f09192946464949493101017f01013f4040403f"
+    "1f2040201f3f4038403f631408146307087008076151494543007f41410002040810200041417f000402010204"
+    "4040404040000102040020545454787f484444383844444420384444487f3854545418087e090102085454543c"
+    "7f0804047800447d40002040443d007f1028440000417f40007c041804787c0804047838444444387c14141408"
+    "081414187c7c080404084854545420043f4440203c4040207c1c2040201c3c4030403c44281028440c5050503c"
+    "4464544c44000836410000007f000000413608000804081008"
+)
+_POLISH = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+
+
+def _ascii(text: str) -> str:
+    return "".join(ch if 32 <= ord(ch) <= 126 else "?" for ch in text.translate(_POLISH))
 
 
 def _rgb565(r: int, g: int, b: int) -> QColor:
@@ -166,7 +186,7 @@ def _draw(d: _Lcd, s: Screen) -> None:
     kind = s.kind
     if kind == "splash":
         d.centered_fit("ChocPilot", 60, 60, 5, 3, ACCENT, BG)
-        d.centered_fit("fw sym.  ChocPilot v0", 140, 30, 2, 1, MUTED, BG)
+        d.centered_fit("fw sym.  ChocPilot", 140, 30, 2, 1, MUTED, BG)
     elif kind == "offline":
         d.centered_fit("Offline", 60, 60, 6, 3, WARN, BG)
         d.centered_fit("Czekam na aplikację", 140, 30, 2, 1, TEXT, BG)
@@ -305,3 +325,38 @@ def render(screen: Screen) -> QImage:
     if screen.flip:
         image = image.transformed(QTransform().rotate(180))  # flip = obrót o 180°
     return image
+
+
+class LcdView(QLabel):
+    """Podgląd ekranu urządzenia (piksele skalowane bez wygładzania)."""
+
+    def __init__(self, scale: int = 1, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._scale = scale
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("background:#000; border:2px solid #222; border-radius:4px;")
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFixedSize(QSize(WIDTH * scale + 8, HEIGHT * scale + 8))
+        self._last: Screen | None = None
+        self.show_screen(Screen(kind="offline"))
+
+    def show_screen(self, screen: Screen) -> None:
+        if screen == self._last:
+            return
+        self._last = screen
+        image = render(screen)
+        if screen.kind != "off":
+            # podświetlenie (jasność) → przyciemnienie podglądu
+            level = 0.45 + 0.55 * (screen.brightness / 255)
+            if level < 0.99:
+                painter = QPainter(image)
+                painter.fillRect(image.rect(), QColor(0, 0, 0, int(255 * (1 - level))))
+                painter.end()
+        if self._scale != 1:
+            image = image.scaled(
+                WIDTH * self._scale,
+                HEIGHT * self._scale,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        self.setPixmap(QPixmap.fromImage(image))

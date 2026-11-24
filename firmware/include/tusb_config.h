@@ -1,4 +1,4 @@
-// TinyUSB – konfiguracja dla ChocPilot v0 (STM32F072, USB FS bez kwarcu).
+// TinyUSB – konfiguracja dla ChocPilot (STM32F072, USB FS bez kwarcu).
 // Urządzenie złożone: CDC (łącze z aplikacją, JSON Lines) + HID (klawiatura i multimedia
 // w trybie awaryjnym). Deskryptory: src/usb_descriptors.cpp.
 #pragma once

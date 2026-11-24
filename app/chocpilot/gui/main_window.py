@@ -126,13 +126,13 @@ class MainWindow(QMainWindow):
         bridge.testModeChanged.connect(self._sync_test_action)
         bridge.klipperChanged.connect(self._on_klipper_changed)
 
-        # Odświeżanie podglądu OLED
-        self._oled_timer = QTimer(self)
-        self._oled_timer.setInterval(80)
-        self._oled_timer.timeout.connect(
-            lambda: self.device_view.oled.show_screen(self._screen_provider())
+        # Odświeżanie podglądu LCD
+        self._lcd_timer = QTimer(self)
+        self._lcd_timer.setInterval(80)
+        self._lcd_timer.timeout.connect(
+            lambda: self.device_view.lcd.show_screen(self._screen_provider())
         )
-        self._oled_timer.start()
+        self._lcd_timer.start()
 
         # Zmiany konfiguracji wysyłamy z opóźnieniem (np. pisanie etykiety)
         self._apply_timer = QTimer(self)
@@ -530,8 +530,6 @@ class MainWindow(QMainWindow):
         self.device_view.keySelected.connect(self._select_key)
         self.device_view.controlSelected.connect(self._select_control)
         self.device_view.set_display_mode(self.config.settings.device.display_mode)
-        self.device_view.set_controls_visible(self.config.settings.device.controls)
-        self.device_view.set_screen_type(self.config.settings.device.screen)
 
         self.profile_editor = ProfileEditor(self._running_processes)
         self.profile_editor.set_default_handlers(
@@ -539,7 +537,6 @@ class MainWindow(QMainWindow):
         )
         self.profile_editor.changed.connect(self._config_edited)
         self.profile_editor.renameRequested.connect(self._do_rename)
-        self.profile_editor.set_leds_available(self.config.settings.device.leds_available)
         self.key_editor = KeyEditor(context)
         self.key_editor.changed.connect(self._binding_edited)
         self.key_editor.closeRequested.connect(lambda: self._select_key(None))
@@ -867,7 +864,8 @@ class MainWindow(QMainWindow):
         dialog.embed()
         dialog.accepted.connect(lambda: self._settings_accepted(dialog))
         dialog.rejected.connect(lambda: self._settings_rejected(dialog))
-        self.settings_host.layout().addWidget(dialog)
+        if (host_layout := self.settings_host.layout()) is not None:
+            host_layout.addWidget(dialog)
         dialog.show()
         self._settings_dialog = dialog
         self._go("settings")
@@ -904,8 +902,9 @@ class MainWindow(QMainWindow):
                 APP_NAME,
                 tr(
                     "Przełączyć urządzenie w tryb wgrywania firmware?\n"
-                    "Pro Micro uruchomi bootloader Caterina na ok. 8 s (nowy port COM) – "
-                    "wtedy wgraj firmware: pio run -e promicro -t upload."
+                    "Płytka odłączy się od aplikacji i uruchomi bootloader USB DFU "
+                    "(STM32 BOOTLOADER). Wgraj firmware (firmware/flash.ps1 albo "
+                    "pio run -t upload) – po wgraniu płytka sama wróci do pracy."
                 ),
             )
             if answer == QMessageBox.StandardButton.Yes:
@@ -916,8 +915,8 @@ class MainWindow(QMainWindow):
             self,
             f"{tr('O programie')} {APP_NAME}",
             f"<b>{APP_NAME}</b> {__version__}<br>"
-            + tr('Macropad 2×4 (Kailh Choc) z ekranem OLED 2,42" albo LCD 2".')
-            + "<br>Firmware: Arduino Pro Micro (ATmega32U4), ChocPilot v0 (STM32F072).",
+            + tr('Macropad 2×4 (Kailh Choc) z ekranem LCD 2" IPS, pokrętłami i suwakiem.')
+            + '<br>STM32F072 · Waveshare 2" IPS LCD 240×320',
         )
 
     # ------------------------------------------------------------------ zdarzenia kontrolera
@@ -933,53 +932,17 @@ class MainWindow(QMainWindow):
         if (
             connected
             and info is not None
-            and info.encoder
-            and not self.config.settings.device.controls
-        ):
-            # Pierwsza płytka z pokrętłami (ChocPilot v0) – od teraz widać pokrętła i suwak.
-            self.config.settings.device.controls = True
-            self.device_view.set_controls_visible(True)
-            self._config_edited()
-        if (
-            connected
-            and info is not None
-            and info.leds
-            and not self.config.settings.device.leds_available
-        ):
-            # Pierwsza płytka z diodami LED – od teraz widać ustawienia podświetlenia.
-            self.config.settings.device.leds_available = True
-            self.profile_editor.set_leds_available(True)
-            self._config_edited()
-        if (
-            connected
-            and info is not None
             and list(info.savers) != self.config.settings.device.savers_available
         ):
-            # Lista animacji wygaszacza z płytki – do wyboru w ustawieniach urządzenia.
+            # Lista animacji wygaszacza z firmware – do wyboru w ustawieniach urządzenia.
             self.config.settings.device.savers_available = list(info.savers)
-            self._config_edited()
-        if connected and info is not None and info.screen != self.config.settings.device.screen:
-            # Inny rodzaj ekranu niż ostatnio (np. LCD ChocPilot v0) – podgląd jak na płytce.
-            self.config.settings.device.screen = info.screen  # type: ignore[assignment]
-            self.device_view.set_screen_type(info.screen)
             self._config_edited()
         if connected and info is not None:
             self.status_text.setText(f"{tr('Połączono')} · {port}")
             self.status_board.setText(f"{tr('Płytka')}: {info.board_name}")
-            if info.screen == "lcd":
-                self.status_fw.setText(f"Firmware: {info.fw} · LCD 320×240")
-            else:
-                self.status_fw.setText(f"Firmware: {info.fw} · OLED: {info.oled_status}")
-            if info.has_diag and info.oled_addr is None:
-                self.status_fw.setStyleSheet(
-                    f"font-size: 8.5pt; color: {theme.tokens()['danger']}; font-weight: 600;"
-                )
-                self.status_fw.setToolTip(
-                    tr("Ekran nie odpowiada na I²C – szczegóły w zakładce Dziennik")
-                )
-            else:
-                self.status_fw.setStyleSheet("font-size: 8.5pt;")
-                self.status_fw.setToolTip("")
+            self.status_fw.setText(f"Firmware: {info.fw}")
+            self.status_fw.setStyleSheet("font-size: 8.5pt;")
+            self.status_fw.setToolTip("")
         else:
             self.status_text.setText(tr("Rozłączono"))
             self.status_board.setText(tr("Szukam ChocPilot…"))

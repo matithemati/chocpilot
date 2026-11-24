@@ -198,36 +198,20 @@ void test_build_messages() {
   TEST_ASSERT_EQUAL_STRING("{\"type\":\"ack\",\"id\":7}", buf);
   buildError(buf, sizeof(buf), false, 0, "invalid json");
   TEST_ASSERT_EQUAL_STRING("{\"type\":\"error\",\"msg\":\"invalid json\"}", buf);
-  buildHello(buf, sizeof(buf), "promicro", "1.0.0", false);
+  buildHello(buf, sizeof(buf), "chocpilot", "1.0.0", false);
   TEST_ASSERT_EQUAL_STRING(
-      "{\"type\":\"hello\",\"device\":\"chocpilot\",\"fw\":\"1.0.0\",\"board\":\"promicro\","
+      "{\"type\":\"hello\",\"device\":\"chocpilot\",\"fw\":\"1.0.0\",\"board\":\"chocpilot\","
       "\"keys\":8,\"encoder\":false,\"hid\":true,\"online\":false,\"max_line\":272}",
       buf);
-  // Diagnostyka I²C: OLED znaleziony / brak odpowiedzi.
-  I2cDiag diag;
-  diag.oledAddr = 0x3D;
-  diag.count = 1;
-  diag.devices[0] = 0x3D;
-  buildHello(buf, sizeof(buf), "promicro", "1.0.0", true, &diag);
-  TEST_ASSERT_NOT_NULL(strstr(buf, "\"oled\":61,\"i2c\":[61]"));
-  diag = I2cDiag();
-  buildHello(buf, sizeof(buf), "promicro", "1.0.0", true, &diag);
-  TEST_ASSERT_NOT_NULL(strstr(buf, "\"oled\":null,\"i2c\":[]"));
-  diag.sdaLevel = 0;
-  diag.sclLevel = 1;
-  diag.swapped = true;
-  buildHello(buf, sizeof(buf), "promicro", "1.0.0", true, &diag);
-  TEST_ASSERT_NOT_NULL(strstr(buf, "\"lines\":{\"sda\":0,\"scl\":1},\"swapped\":true"));
   // Za mały bufor → 0.
-  TEST_ASSERT_EQUAL(0, buildHello(buf, 10, "promicro", "1.0.0", false));
+  TEST_ASSERT_EQUAL(0, buildHello(buf, 10, "chocpilot", "1.0.0", false));
 }
 
 void test_build_controls_messages() {
   char buf[256];
-  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", false, nullptr, true);
-  TEST_ASSERT_NOT_NULL(strstr(buf, "\"board\":\"chocpilot_v0\""));
+  buildHello(buf, sizeof(buf), "chocpilot", "1.1.0", false, true);
+  TEST_ASSERT_NOT_NULL(strstr(buf, "\"board\":\"chocpilot\""));
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"encoder\":true"));
-  TEST_ASSERT_NULL(strstr(buf, "\"oled\""));
 
   buildEncoder(buf, sizeof(buf), 1, -3, 500);
   TEST_ASSERT_EQUAL_STRING("{\"type\":\"encoder\",\"index\":1,\"delta\":-3,\"t\":500}", buf);
@@ -380,9 +364,9 @@ void test_leds_command() {
 
 void test_hello_reports_leds() {
   char buf[256];
-  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", true, nullptr, true, 12);
+  buildHello(buf, sizeof(buf), "chocpilot", "1.1.0", true, true, 12);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"leds\":12"));
-  buildHello(buf, sizeof(buf), "promicro", "1.1.0", true);
+  buildHello(buf, sizeof(buf), "chocpilot", "1.1.0", true);  // bez diod i animacji
   TEST_ASSERT_NULL(strstr(buf, "\"leds\""));
 }
 
@@ -501,9 +485,9 @@ void test_settings_saver() {
 void test_hello_reports_savers() {
   char buf[256];
   const char* names[] = {"rabbit", "corgi"};
-  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", true, nullptr, true, 12, names, 2);
+  buildHello(buf, sizeof(buf), "chocpilot", "1.1.0", true, true, 12, names, 2);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"savers\":[\"rabbit\",\"corgi\"]"));
-  buildHello(buf, sizeof(buf), "promicro", "1.1.0", true);
+  buildHello(buf, sizeof(buf), "chocpilot", "1.1.0", true);  // bez diod i animacji
   TEST_ASSERT_NULL(strstr(buf, "\"savers\""));
 }
 
@@ -585,7 +569,7 @@ void test_icon_command_and_base64() {
                     parse("{\"type\":\"icon\",\"key\":1,\"offset\":543,\"data\":\"AQID\"}").status);
 
   char buf[256];
-  buildHello(buf, sizeof(buf), "chocpilot_v0", "1.1.0", true, nullptr, true, 12, nullptr, 0, 32);
+  buildHello(buf, sizeof(buf), "chocpilot", "1.1.0", true, true, 12, nullptr, 0, 32);
   TEST_ASSERT_NOT_NULL(strstr(buf, "\"icon\":32"));
 }
 

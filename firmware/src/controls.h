@@ -1,4 +1,4 @@
-// Pokrętła EC11 (TIM2 / TIM3 w trybie enkodera), ich przyciski i suwak ADC – ChocPilot v0.
+// Pokrętła EC11 (TIM2 / TIM3 w trybie enkodera), ich przyciski i suwak ADC – ChocPilot.
 #pragma once
 
 #include <stdint.h>

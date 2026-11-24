@@ -79,7 +79,7 @@ def test_settings_saver_validation_and_hello() -> None:
         {
             "type": "hello",
             "device": "chocpilot",
-            "board": "chocpilot_v0",
+            "board": "chocpilot",
             "savers": ["rabbit", "corgi", "BAD", 3, "off"],
         }
     )
@@ -103,14 +103,14 @@ def connect(info: DeviceInfo, saver: str, sync_executor) -> FakeTransport:
 
 
 def test_saver_sent_only_to_boards_with_animations(sync_executor) -> None:
-    v0 = DeviceInfo("chocpilot", "1.1.0", "chocpilot_v0", savers=("rabbit", "corgi"))
-    sent = connect(v0, "corgi", sync_executor).of_type("settings")
+    full = DeviceInfo("chocpilot", "1.1.0", "chocpilot", savers=("rabbit", "corgi"))
+    sent = connect(full, "corgi", sync_executor).of_type("settings")
     assert sent[0]["saver"] == "corgi"
     # animacja, której płytka nie zna → wygaszony ekran
-    sent = connect(v0, "dragon", sync_executor).of_type("settings")
+    sent = connect(full, "dragon", sync_executor).of_type("settings")
     assert sent[0]["saver"] == "off"
-    promicro = DeviceInfo("chocpilot", "1.1.0", "promicro")
-    sent = connect(promicro, "corgi", sync_executor).of_type("settings")
+    no_savers = DeviceInfo("chocpilot", "1.1.0", "chocpilot")  # firmware bez animacji
+    sent = connect(no_savers, "corgi", sync_executor).of_type("settings")
     assert "saver" not in sent[0]
 
 
@@ -120,7 +120,7 @@ def test_saver_sent_only_to_boards_with_animations(sync_executor) -> None:
 def test_simulator_shows_saver_animation() -> None:
     now = [0.0]
     replies: list[dict] = []
-    device = SimulatedDevice(board="chocpilot_v0", clock=lambda: now[0], emit=replies.append)
+    device = SimulatedDevice(clock=lambda: now[0], emit=replies.append)
     device.handle({"type": "hello"})
     assert replies[-1]["savers"] == ["rabbit", "corgi"]
     device.handle({"type": "settings", "screensaver_s": 5, "saver": "rabbit"})
@@ -161,8 +161,9 @@ def test_settings_dialog_saver_choice(qtbot) -> None:
     from chocpilot.gui.settings_dialog import SettingsDialog
 
     config = Config()
+    config.settings.device.savers_available = []
     dialog = SettingsDialog(config.settings, lambda: [], lambda k: None)
-    assert dialog.saver_row.isHidden()  # płytka bez animacji – brak wyboru
+    assert dialog.saver_row.isHidden()  # firmware bez animacji – brak wyboru
     config.settings.device.savers_available = ["rabbit", "corgi"]
     dialog = SettingsDialog(config.settings, lambda: [], lambda k: None)
     assert not dialog.saver_row.isHidden()
@@ -196,7 +197,7 @@ def test_time_sent_to_lcd_boards_and_resent(sync_executor) -> None:
     controller = Controller(config, transport, FakePlatform(), executor=sync_executor, clock=clock)
     controller.local_time = lambda: datetime.datetime(2026, 11, 20, 14, 5, 30)
     transport.connect()
-    info = DeviceInfo("chocpilot", "1.1.0", "chocpilot_v0", savers=("rabbit", "corgi"))
+    info = DeviceInfo("chocpilot", "1.1.0", "chocpilot", savers=("rabbit", "corgi"))
     controller.handle_state(ConnectionState.CONNECTED, info, "COM9")
     assert transport.of_type("time") == [{"type": "time", "hour": 14, "minute": 5, "second": 30}]
     clock.advance(protocol.TIME_SYNC_INTERVAL_S - 1)
@@ -206,16 +207,20 @@ def test_time_sent_to_lcd_boards_and_resent(sync_executor) -> None:
     controller.tick()
     assert len(transport.of_type("time")) == 2  # co kilka minut – czas letni, dryf zegara
 
-    promicro = FakeTransport()
-    c2 = Controller(config, promicro, FakePlatform(), executor=sync_executor, clock=ManualClock())
-    promicro.connect()
-    c2.handle_state(ConnectionState.CONNECTED, DeviceInfo("chocpilot", "1.0.0", "promicro"), "COM3")
-    assert promicro.of_type("time") == []
+    no_saver_fw = FakeTransport()
+    c2 = Controller(
+        config, no_saver_fw, FakePlatform(), executor=sync_executor, clock=ManualClock()
+    )
+    no_saver_fw.connect()
+    c2.handle_state(
+        ConnectionState.CONNECTED, DeviceInfo("chocpilot", "1.0.0", "chocpilot"), "COM3"
+    )
+    assert no_saver_fw.of_type("time") == []
 
 
 def test_simulator_clock_on_saver() -> None:
     now = [0.0]
-    device = SimulatedDevice(board="chocpilot_v0", clock=lambda: now[0])
+    device = SimulatedDevice(clock=lambda: now[0])
     device.handle({"type": "settings", "screensaver_s": 5, "saver": "corgi"})
     now[0] = 6.0
     assert device.screen().clock == ""  # bez czasu z aplikacji – bez zegara
